@@ -1,0 +1,68 @@
+/CoCI_Project
+│
+├── .github/              # For GitHub Actions (optional)
+├── .gitignore            #  To ignore large files
+│
+├── backend/              # All Python/FastAPI code lives here
+│   │
+│   ├── app/
+│   │   │
+│   │   ├── __init__.py
+│   │   ├── main.py       # FastAPI app starts here
+│   │   │
+│   │   ├── engine1_cv/
+│   │   │   ├── __init__.py
+│   │   │   ├── pipeline.py     # Logic for YOLO + MediaPipe
+│   │   │   └── fusion.py       # Logic for "Contextual Fusion"
+│   │   │
+│   │   ├── engine2_llm/
+│   │   │   ├── __init__.py
+│   │   │   ├── router.py       # The "Dynamic Query Router"
+│   │   │   └── handlers.py     # Logic for Local/External
+|	|	|	└── recipes/        1. STORE RECIPES HERE
+|	|	|	   ├── __init__.py 
+|	|	|	   ├── recipe_loader.py   # 2. A new Python file
+|	|	|	   ├── my_recipe_1.json   # 3. recipes as JS     |   |   |      └── my_recipe_2.json
+ LLM_calls
+│   │   │
+│   │   └── engine3_api/
+│   │       ├── __init__.py
+│   │       └── endpoints.py    # WebSocket & SSE endpoints
+│   │
+│   ├── tests/                # Folder for your Python tests
+│   │   ├── test_engine1.py
+│   │   └── test_engine2.py
+│   │
+│   └── requirements.txt        # Lists all Python dependencies
+│
+├── frontend/              Electron/React app
+│   │
+│   ├── public/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── App.js
+│   │   └── index.js
+│   │
+│   ├── main.js               # Electron's main process file
+│   └── package.json          # Frontend dependencies
+│
+├── models/                 # <== (DO NOT PUSH TO GITHUB)
+│   │
+│   ├── yolov10n.pt           # base YOLO model
+│   └── yolov10n_custom.pt    #  fine-tuned model
+│
+├── data/                   # <== (DO NOT PUSH TO GITHUB)
+│   │
+│   ├── raw_video/            # Videos for annotation
+│   └── annotations/          # CVAT/Roboflow exports (YOLO TXT)
+│
+├── notebooks/              # Jupyter notebooks for experiments
+│   │
+│   ├── 01_benchmark_latency.ipynb
+│   └── 02_test_model_tuning.ipynb
+│
+├── docs/                   # Documentation
+│   │
+│   └── API_Contracts.md      #  M2 API Contracts
+│
+└── README.md                 # Project's main homepage
