@@ -5,7 +5,20 @@ from app.api.v1.endpoints import endpoints, stream
 
 setup_logging()
 
-app = FastAPI(title=settings.PROJECT_NAME)
+from contextlib import asynccontextmanager
+import asyncio
+from app.engines.cv.pipeline import cv_pipeline
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    task = asyncio.create_task(cv_pipeline.start())
+    yield
+    # Shutdown
+    cv_pipeline.stop()
+    await task
+
+app = FastAPI(title=settings.PROJECT_NAME, lifespan=lifespan)
 
 app.include_router(endpoints.router, prefix=settings.API_V1_STR)
 app.include_router(stream.router, prefix="/ws") # WebSocket is usually at root or specific path, not always under /api/v1
@@ -14,3 +27,5 @@ app.include_router(stream.router, prefix="/ws") # WebSocket is usually at root o
 @app.get("/")
 def root():
     return {"message": "Welcome to CoCI Project API"}
+
+

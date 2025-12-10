@@ -1,6 +1,9 @@
 import cv2
 import asyncio
+import base64
 from app.api.v1.endpoints.stream import manager
+from app.engines.cv.yolo import yolo_model
+from app.engines.cv.gesture import gesture_recognizer
 
 class CVPipeline:
     def __init__(self):
@@ -22,21 +25,28 @@ class CVPipeline:
             if not ret:
                 break
 
-            # Placeholder for YOLO and MediaPipe inference
-            # detections = yolo.predict(frame)
-            # gestures = gesture.recognize(frame)
+            # 1. Object Detection
+            detections = yolo_model.predict(frame)
             
-            # Simulate processing delay and data
-            await asyncio.sleep(0.03) # ~30 FPS
+            # 2. Gesture Recognition
+            gestures, landmarks = gesture_recognizer.recognize(frame)
             
-            # Broadcast dummy data for now
+            # 3. Encode frame for frontend (optional, if we want to stream video)
+            # _, buffer = cv2.imencode('.jpg', frame)
+            # frame_b64 = base64.b64encode(buffer).decode('utf-8')
+
+            # Broadcast data
             await manager.broadcast_json({
                 "type": "cv_update",
                 "data": {
-                    "objects": [],
-                    "gestures": []
+                    "objects": detections,
+                    "gestures": gestures,
+                    # "frame": frame_b64 # Uncomment if streaming video
                 }
             })
+            
+            # Control FPS (approx 30 FPS)
+            await asyncio.sleep(0.03)
 
         self.cap.release()
         print("CV Pipeline stopped.")
