@@ -32,8 +32,8 @@ class CVPipeline:
             gestures, landmarks = gesture_recognizer.recognize(frame)
             
             # 3. Encode frame for frontend (optional, if we want to stream video)
-            # _, buffer = cv2.imencode('.jpg', frame)
-            # frame_b64 = base64.b64encode(buffer).decode('utf-8')
+            _, buffer = cv2.imencode('.jpg', frame)
+            frame_b64 = base64.b64encode(buffer).decode('utf-8')
 
             # Broadcast data
             await manager.broadcast_json({
@@ -41,7 +41,7 @@ class CVPipeline:
                 "data": {
                     "objects": detections,
                     "gestures": gestures,
-                    # "frame": frame_b64 # Uncomment if streaming video
+                    "frame": frame_b64 # Uncomment if streaming video
                 }
             })
             
