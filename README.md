@@ -2,7 +2,30 @@
 
 This branch (`hardware-free`) supports development and testing using standard laptop hardware (webcam) without requiring the specialized projector/camera setup.
 
-## 📋 Prerequisites
+---
+
+## 🔄 System Workflow & Architecture
+
+The CoCI system is designed as a real-time interactive loop. Here is a simple explanation of how the code interacts:
+
+### 1. Sensing (Backend)
+- **Entry Point**: `backend/app/main.py` initializes the FastAPI server and starts the Computer Vision (CV) pipeline.
+- **CV Pipeline**: The system captures video from your webcam. It uses AI models (e.g., YOLO) to "see" objects and gestures in the frame.
+
+### 2. Computation (Backend)
+- **Logic**: The backend processes the visual data. If you interact (e.g., ask a question via voice/text), it routes the request to an **LLM** (Large Language Model) like Ollama for intelligent responses.
+- **API**: `FastAPI` handles all logic and prepares data for the frontend.
+
+### 3. Communication (WebSocket)
+- **The Bridge**: A **WebSocket** connection (`ws://localhost:8000/ws/ws`) is established between the Backend and Frontend.
+- **Real-Time Data**: The backend pushes processed video frames, detection data, and AI responses to the frontend instantly.
+
+### 4. Actuation & Display (Frontend)
+- **React + Electron**: The frontend (`frontend/src`) receives the data stream.
+- **Visualization**: It draws the video feed, overlays bounding boxes for detected objects, and displays text/voice responses from the AI.
+- **User Interface**: You interact with this unified Electron window.
+
+## Prerequisites
 
 Before you begin, ensure you have the following installed:
 - **Python 3.8+**
