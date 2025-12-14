@@ -14,19 +14,38 @@ Before you begin, ensure you have the following installed:
 
 ##  Installation & Setup
 
+### 0. Clone & Checkout (For Team Members)
+1. Clone the repository:
+   ```bash
+   git clone <repository_url>
+   cd Pro_Trial
+   ```
+2. Switch to the `hardware-free` branch:
+   ```bash
+   git checkout hardware-free
+   ```
+
 ### 1. Backend Setup (FastAPI)
 
-1. Navigate to the backend directory:
+1. **Install and Run Ollama (Required for LLM features):**
+   - Download and install [Ollama](https://ollama.com/).
+   - Pull the required model:
+     ```bash
+     ollama pull llama3.2
+     ```
+   - Ensure the Ollama server is running (usually on `localhost:11434`).
+
+2. Navigate to the backend directory:
    ```bash
    cd backend
    ```
 
-2. Create a virtual environment:
+3. Create a virtual environment:
    ```bash
    python -m venv venv
    ```
 
-3. Activate the virtual environment:
+4. Activate the virtual environment:
    - **Windows (PowerShell):**
      ```powershell
      .\venv\Scripts\Activate
@@ -36,12 +55,12 @@ Before you begin, ensure you have the following installed:
      source venv/bin/activate
      ```
 
-4. Install dependencies:
+5. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
 
-5. Run the backend server:
+6. Run the backend server:
    ```bash
    uvicorn app.main:app --reload --port 8000
    ```
@@ -83,7 +102,7 @@ pytest tests
 
 **Scope of Tests:**
 - **`test_engine1.py`**: Validates YOLO object detection logic (using mock/placeholder images).
-- **`test_engine2.py`**: Validates MediaPipe gesture recognition logic.
+- **`test_engine2.py`**: Validates Gesture recognition logic.
 - **API Tests**: Verifies HTTP and WebSocket endpoints connect correctly.
 
 > **Note:** If tests are currently empty, they serve as placeholders for future unit test definitions.
@@ -104,20 +123,21 @@ The backend sends processed frames to the frontend via WebSocket.
 1. Ensure your face/environment is visible in the application window's video feed.
 2. If the video is black or static, check the backend terminal for "Error: Could not open camera".
 
-#### C. Feature Testing
+#### C. Feature Testing (In Electron App)
+Perform these tests within the launched **Electron application window**, not in a standard web browser.
+
 - **Object Detection**:
   - Hold up common objects (e.g., **Cell Phone**, **Bottle**, **Cup**) to the camera.
   - **Expected Result**: The system should draw bounding boxes or label the objects in the video feed (if visualization is enabled) or log detections in the console.
 
 - **Gesture Recognition**:
-  - Perform hand gestures:
-    1. **Open Palm**: Should trigger "Open" or related events.
-    2. **Closed Fist**: Should trigger "Close" or grab events.
-  - **Expected Result**: Verify in the console/UI that the gesture state changes.
+  - **Current Limitation**: Due to MediaPipe compatibility issues with Python 3.13, gesture recognition is currently using a dummy implementation. 
+  - **Expected Result**: You may see log messages indicating "using dummy implementation" in the backend console.
 
 - **LLM Interaction (Voice/Text)**:
   - If the prompt interface is active, type or speak a query (e.g., "How do I cook this?").
-  - **Expected Result**: You should receive a text response streaming back from the backend.
+  - **Expected Result**: You should receive a text response streaming back from the backend (powered by local Llama 3.2).
+  - **Troubleshooting**: If you get "I'm sorry, I couldn't process that," ensure Ollama is running and `llama3.2` is pulled.
 
 ---
 
@@ -128,3 +148,4 @@ The backend sends processed frames to the frontend via WebSocket.
 | **"Error: Could not open camera"** | Webcam is in use by another app (Zoom, Teams, etc.). | Close other camera apps and restart the backend. |
 | **Frontend displays nothing** | Backend server is not running. | Verify `uvicorn` is running on port 8000. |
 | **WebSocket connection failed** | Port mismatch. | Check `frontend/src/context/WebSocketContext.tsx` matches `ws://localhost:8000/ws/ws`. |
+| **LLM Fails to Respond** | Ollama not running/Model missing. | Run `ollama serve` and `ollama pull llama3.2`. |

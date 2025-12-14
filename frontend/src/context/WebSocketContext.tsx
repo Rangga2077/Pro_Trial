@@ -13,26 +13,35 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     const [isConnected, setIsConnected] = useState(false);
     const [lastMessage, setLastMessage] = useState<any>(null);
 
+    const wsRef = React.useRef<WebSocket | null>(null);
+
     useEffect(() => {
         // Connect to the backend WebSocket
         const ws = new WebSocket('ws://localhost:8000/ws/ws');
+        wsRef.current = ws;
 
         ws.onopen = () => {
             console.log('WebSocket Connected');
-            setIsConnected(true);
+            if (ws === wsRef.current) {
+                setIsConnected(true);
+            }
         };
 
         ws.onclose = () => {
             console.log('WebSocket Disconnected');
-            setIsConnected(false);
+            if (ws === wsRef.current) {
+                setIsConnected(false);
+            }
         };
 
         ws.onmessage = (event) => {
+            // Only process messages from the current active socket
+            if (ws !== wsRef.current) return;
+
             try {
                 const data = JSON.parse(event.data);
                 setLastMessage(data);
             } catch (e) {
-                // Handle non-JSON messages
                 setLastMessage(event.data);
             }
         };
@@ -41,6 +50,9 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
 
         return () => {
             ws.close();
+            if (ws === wsRef.current) {
+                wsRef.current = null;
+            }
         };
     }, []);
 
