@@ -12,7 +12,7 @@ Before you begin, ensure you have the following installed:
 
 ---
 
-## 🚀 Installation & Setup
+##  Installation & Setup
 
 ### 1. Backend Setup (FastAPI)
 
@@ -67,7 +67,7 @@ Before you begin, ensure you have the following installed:
 
 ---
 
-## 🧪 Testing Strategy
+##  Testing Strategy
 
 Since this branch operates in "Hardware-Free" mode, testing focuses on verifying the software stack using your local webcam as the input source.
 
@@ -96,8 +96,8 @@ Follow these steps to manually verify the full system loop:
 1. launch the app.
 2. Open the **Developer Tools** in Electron (Ctrl+Shift+I or Cmd+Option+I).
 3. Check the **Console** tab.
-   - ✅ Look for: `WebSocket Connected`.
-   - ❌ If you see errors, failing to connect to `ws://localhost:8000/ws/ws`.
+   - OK Look for: `WebSocket Connected`.
+   - No OK If you see errors, failing to connect to `ws://localhost:8000/ws/ws`.
 
 #### B. Visual Pipeline Verification
 The backend sends processed frames to the frontend via WebSocket.
@@ -121,7 +121,7 @@ The backend sends processed frames to the frontend via WebSocket.
 
 ---
 
-## 🔧 Troubleshooting
+##  Troubleshooting
 
 | Issue | Possible Cause | Solution |
 |-------|----------------|----------|
