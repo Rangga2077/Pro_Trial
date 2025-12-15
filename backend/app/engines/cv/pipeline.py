@@ -45,6 +45,11 @@ class CVPipeline:
                 }
             })
             
+            # Debug Log
+            if gestures and gestures[0] != "UNKNOWN":
+                print(f"Gesture Detected: {gestures[0]}")
+
+            
             # Control FPS (approx 30 FPS)
             await asyncio.sleep(0.03)
 

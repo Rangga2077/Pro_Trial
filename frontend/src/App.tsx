@@ -1,7 +1,7 @@
 import './App.css'
 import { WebSocketProvider, useWebSocket } from './context/WebSocketContext'
 import { ProjectionLayout } from './features/projection/ProjectionLayout'
-import { RecipeStep } from './features/projection/RecipeStep'
+import { RecipeManager } from './features/projection/RecipeManager'
 import { OverlayCanvas } from './features/projection/OverlayCanvas'
 import { VoiceStatus } from './features/projection/VoiceStatus'
 
@@ -27,10 +27,7 @@ function App() {
     <WebSocketProvider>
       <StatusIndicator />
       <ProjectionLayout>
-        <RecipeStep
-          stepNumber={1}
-          instruction="Chop the onions finely and place them in the glass bowl."
-        />
+        <RecipeManager />
         <OverlayCanvas />
         <VoiceStatus isListening={true} isProcessing={false} />
       </ProjectionLayout>
