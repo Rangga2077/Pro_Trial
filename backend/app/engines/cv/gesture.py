@@ -1,109 +1,197 @@
 import cv2
+import mediapipe as mp
 import numpy as np
-import math
+import os
+import time
 
 class GestureRecognizer:
     def __init__(self):
-        print("GestureRecognizer: Initialized (OpenCV Native)")
+        try:
+            self.model_path = os.path.join(os.getcwd(), 'backend', 'hand_landmarker.task')
+            if not os.path.exists(self.model_path):
+                # Fallback check if running from backend root
+                self.model_path = 'hand_landmarker.task'
+            
+            BaseOptions = mp.tasks.BaseOptions
+            HandLandmarker = mp.tasks.vision.HandLandmarker
+            HandLandmarkerOptions = mp.tasks.vision.HandLandmarkerOptions
+            VisionRunningMode = mp.tasks.vision.RunningMode
+
+            options = HandLandmarkerOptions(
+                base_options=BaseOptions(model_asset_path=self.model_path),
+                running_mode=VisionRunningMode.IMAGE, # IMAGE mode is simpler for now
+                num_hands=2,
+                min_hand_detection_confidence=0.5,
+                min_hand_presence_confidence=0.5,
+                min_tracking_confidence=0.5
+            )
+            
+            self.landmarker = HandLandmarker.create_from_options(options)
+            print("GestureRecognizer: Initialized (MediaPipe Tasks API)")
+            self.running = True
+        except Exception as e:
+            print(f"GestureRecognizer: Error initializing MediaPipe Tasks - {e}")
+            self.landmarker = None
+            self.running = False
 
     def recognize(self, frame):
         """
-        Recognizes hand gestures using Convexity Defects.
+        Recognizes hand gestures using MediaPipe Tasks API.
         Returns:
-            gestures (list): List of detected gesture names (e.g., ["FIVE", "ONE"])
-            landmarks (list): List of contours (for visualization, optional)
+            gestures (list): List of detected gesture names
+            landmarks (list): List of list of landmarks (dictionaries with x,y,z)
         """
-        # 1. Preprocessing
-        # ROI: We typically want to focus on the center or assume the hand is the largest skin object
-        
-        # Convert to HSV
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-
-        # 2. Skin Color Detection
-        # Standard skin color range in HSV
-        lower_skin = np.array([0, 20, 70], dtype=np.uint8)
-        upper_skin = np.array([20, 255, 255], dtype=np.uint8)
-
-        mask = cv2.inRange(hsv, lower_skin, upper_skin)
-
-        # 3. Noise Removal (Morphology)
-        kernel = np.ones((3, 3), np.uint8)
-        mask = cv2.dilate(mask, kernel, iterations=4)
-        mask = cv2.GaussianBlur(mask, (5, 5), 100)
-
-        # 4. Find Contours
-        contours, _ = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-
-        if not contours:
+        if not self.running or self.landmarker is None:
             return [], []
 
-        # Find largest contour (assumed to be hand)
-        max_contour = max(contours, key=lambda x: cv2.contourArea(x))
-
-        # Filter small noise
-        if cv2.contourArea(max_contour) < 2000:
-            return [], []
-
-        # 5. Convex Hull and Defects
         try:
-            hull = cv2.convexHull(max_contour)
+            # MediaPipe Image
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
             
-            # Helper for defects: returnPoints=False to get indices
-            hull_indices = cv2.convexHull(max_contour, returnPoints=False)
-            defects = cv2.convexityDefects(max_contour, hull_indices)
-
-            if defects is None:
-                return [], [max_contour]
-
-            count_fingers = 0
-
-            # 6. Analyze Defects form fingers
-            for i in range(defects.shape[0]):
-                s, e, f, d = defects[i, 0]
-                start = tuple(max_contour[s][0])
-                end = tuple(max_contour[e][0])
-                far = tuple(max_contour[f][0])
-
-                # Calculate sides of triangle
-                a = math.sqrt((end[0] - start[0])**2 + (end[1] - start[1])**2)
-                b = math.sqrt((far[0] - start[0])**2 + (far[1] - start[1])**2)
-                c = math.sqrt((end[0] - far[0])**2 + (end[1] - far[1])**2)
-
-                # Cosine rule to find angle of the defect
-                angle = math.acos((b**2 + c**2 - a**2) / (2*b*c)) * 57
-
-                # If angle < 90, it's a finger gap
-                if angle <= 90:
-                    count_fingers += 1
-                    # Draw defect (inter-finger point)
-                    cv2.circle(frame, far, 5, [0, 0, 255], -1)
-
-                # Draw hull
-                cv2.line(frame, start, end, [0, 255, 255], 2)
-
-            # The number of fingers is usually gaps + 1
-            # But we handle 0 fingers (Fist) vs 1 finger vs 5 fingers
-            total_fingers = count_fingers + 1
+            # Detect
+            detection_result = self.landmarker.detect(mp_image)
             
-            gesture_name = "UNKNOWN"
-            if total_fingers == 1:
-                gesture_name = "ONE" # Pointing
-            elif total_fingers == 2:
-                gesture_name = "TWO"
-            elif total_fingers >= 5:
-                gesture_name = "FIVE" # Open Palm
-            elif total_fingers == 0:
-                gesture_name = "FIST"
+            gestures = []
+            visualization_data = [] # List of NormalizedLandmark lists
 
-            # Visual Feedback on Frame
-            cv2.putText(frame, f"Fingers: {total_fingers}", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-            cv2.putText(frame, f"Gesture: {gesture_name}", (50, 90), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            cv2.drawContours(frame, [max_contour], -1, (0, 255, 0), 2)
-            
-            return [gesture_name], [max_contour]
+            # Process results
+            if detection_result.hand_landmarks:
+                for hand_landmarks in detection_result.hand_landmarks:
+                    # hand_landmarks is a list of NormalizedLandmark objects
+                    
+                    # Analyze gestures
+                    gesture = self.analyze_gesture_task(hand_landmarks)
+                    if gesture != "UNKNOWN":
+                        gestures.append(gesture)
+                    
+                    # Store for viz
+                    visualization_data.append(hand_landmarks)
+
+            return gestures, visualization_data
 
         except Exception as e:
-            # print(f"Gesture Algo Error: {e}")
+            print(f"Gesture Algo Error: {e}")
             return [], []
 
+    def analyze_gesture_task(self, landmarks):
+        """
+        Analyze MediaPipe landmarks (Tasks API).
+        landmarks: list of NormalizedLandmark objects (x, y, z)
+        """
+        # Convert to list of dicts or just access directly
+        # lms[i].x, lms[i].y
+        
+        # Helper: extended?
+        # Index (8) Tip Y < PIP (6) Y
+        index_ext = landmarks[8].y < landmarks[6].y
+        middle_ext = landmarks[12].y < landmarks[10].y
+        ring_ext = landmarks[16].y < landmarks[14].y
+        pinky_ext = landmarks[20].y < landmarks[18].y
+        
+        # Thumb heuristic: Tip x/y logic is tricky.
+        # Let's count fingers
+        finger_count = 0
+        if index_ext: finger_count += 1
+        if middle_ext: finger_count += 1
+        if ring_ext: finger_count += 1
+        if pinky_ext: finger_count += 1
+        
+        # OPEN_PALM: 4 fingers up
+        if finger_count >= 4:
+            return "OPEN_PALM"
+            
+        # POINTING: Index up, others down
+        if index_ext and (not middle_ext) and (not ring_ext) and (not pinky_ext):
+            return "POINTING"
+            
+        return "UNKNOWN"
+
 gesture_recognizer = GestureRecognizer()
+
+def draw_landmarks_on_image(rgb_image, hand_landmarks):
+    """
+    Custom drawing function since mp.solutions.drawing_utils is missing.
+    hand_landmarks: list of NormalizedLandmark
+    """
+    h, w, _ = rgb_image.shape
+    
+    # Define connections (MediaPipe Hands)
+    calc_connections = [
+        (0,1), (1,2), (2,3), (3,4),       # Thumb
+        (0,5), (5,6), (6,7), (7,8),       # Index
+        (9,10), (10,11), (11,12),         # Middle (Root 9 connects to 0 usually, but in MP graph it varies)
+        (13,14), (14,15), (15,16),        # Ring
+        (17,18), (18,19), (19,20),        # Pinky
+        (0,17), (0,13), (0,9), (0,5)      # Palm roots
+    ]
+    
+    # Draw points
+    for landmark in hand_landmarks:
+        cx, cy = int(landmark.x * w), int(landmark.y * h)
+        cv2.circle(rgb_image, (cx, cy), 5, (0, 0, 255), -1)
+
+    # Draw lines
+    # Need random access to landmarks
+    lms = hand_landmarks
+    for start_idx, end_idx in calc_connections:
+        start = lms[start_idx]
+        end = lms[end_idx]
+        
+        start_pt = (int(start.x * w), int(start.y * h))
+        end_pt = (int(end.x * w), int(end.y * h))
+        
+        cv2.line(rgb_image, start_pt, end_pt, (0, 255, 0), 2)
+
+def main():
+    print("Initializing GestureRecognizer (Tasks API)...")
+    recognizer = GestureRecognizer()
+    
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        print("Error: Could not open camera.")
+        return
+
+    print("Starting interactive test. Press 'q' to quit.")
+    print("---------------------------------------------")
+    print("GESTURE GUIDE:")
+    print(" - OPEN_PALM: Extend all 5 fingers.")
+    print(" - POINTING: Extend only Index finger.")
+    print("---------------------------------------------")
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        gestures, visualization_data = recognizer.recognize(frame)
+
+        # Draw overlays
+        # visualization_data is list of lists of NormalizedLandmark
+        if visualization_data:
+            for hand_landmarks in visualization_data:
+                draw_landmarks_on_image(frame, hand_landmarks)
+                
+                # Debug check: verify we have 21 points
+                num_points = len(hand_landmarks)
+                cv2.putText(frame, f"Points: {num_points}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
+        # Draw Gesture Text
+        if gestures:
+            text = f"Gesture: {gestures[0]}"
+            color = (0, 255, 0) # Green
+        else:
+            text = "Gesture: NONE"
+            color = (0, 0, 255) # Red
+
+        cv2.putText(frame, text, (50, 80), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
+
+        cv2.imshow("MediaPipe Tasks Gesture Test", frame)
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+if __name__ == "__main__":
+    main()

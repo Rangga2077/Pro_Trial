@@ -14,6 +14,16 @@ Small, powerful computers that can be mounted directly to the projector or hidde
     - *Pros*: Built specifically for AI/Computer Vision. Excellent for running YOLO models efficiently.
     - *Cons*: Runs Linux (Ubuntu) ARM64. Requires some setup effort to port from Windows.
 
+### Budget Option: **Raspberry Pi 5** (The "Student Choice")
+Yes, you can use a Raspberry Pi, but there are strict caveats.
+- **Model**: You **MUST use a Raspberry Pi 5 (8GB RAM)**. The Pi 4 is too slow for smooth projection UI + Computer Vision.
+- **Performance**:
+    - *Without AI Kit*: You will likely get ~5-12 FPS running YOLO. The UI might feel lagging.
+    - *With AI Kit*: You should buy the **Raspberry Pi AI Kit (Hailo-8L)** (~$70). This hardware accelerator allows the Pi 5 to run YOLO models at 30+ FPS effortlessly.
+- **OS**: You will need to switch from Windows to **Raspberry Pi OS (Linux)**.
+    - *Porting Effort*: Low/Medium. Python runs natively, but you'll need to reinstall dependencies (`pip install ...`).
+- **Cost**: The Pi 5 + Power Supply + SD Card + AI Kit is approx $150–$180 total. This is significantly cheaper than a $500 Mini PC.
+
 **Setup**: Velcro or mount this Mini PC on top of the projector or hide it inside the exhibition plinth/table.
 
 ## 2. The Projector

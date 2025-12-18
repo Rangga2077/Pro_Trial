@@ -22,7 +22,7 @@ export const RecipeManager: React.FC = () => {
     const gestureCount = useRef<Record<string, number>>({});
     const lastActionTime = useRef<number>(0);
     const COOLDOWN_MS = 1700; // Reduced cooldown slightly
-    const REQUIRED_FRAMES = 5; // Reduced from 10 to 5 for faster response
+    const REQUIRED_FRAMES = 3; // Reduced from 5 to 3 for faster response
 
     useEffect(() => {
         if (!lastMessage || lastMessage.type !== 'cv_update') return;
@@ -60,13 +60,13 @@ export const RecipeManager: React.FC = () => {
     }, [lastMessage]);
 
     const handleGestureAction = (gesture: string) => {
-        if (gesture === 'FIVE') {
+        if (gesture === 'OPEN_PALM') {
             // Next Step
             setCurrentStepIndex(prev =>
                 prev < RECIPE_STEPS.length - 1 ? prev + 1 : prev
             );
             console.log("Action: NEXT STEP");
-        } else if (gesture === 'ONE') {
+        } else if (gesture === 'POINTING') {
             // Previous Step
             setCurrentStepIndex(prev =>
                 prev > 0 ? prev - 1 : prev
@@ -89,7 +89,7 @@ export const RecipeManager: React.FC = () => {
                     {lastGesture || "NONE"}
                 </p>
                 <div className="mt-2 text-xs text-gray-500">
-                    Map: FIVE (Open) &rarr; Next | ONE (Point) &rarr; Prev
+                    Map: OPEN_PALM (Open) &rarr; Next | POINTING (Point) &rarr; Prev
                 </div>
             </div>
         </div>

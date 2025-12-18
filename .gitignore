@@ -1,2 +1,13 @@
 GUIDE.txt
 revision.txt
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+
+# OS
+.DS_Store
+Thumbs.db
