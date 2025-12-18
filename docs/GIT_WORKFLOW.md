@@ -57,7 +57,46 @@ git stash pop
 
 ---
 
+## 2b. Untuk Anggota Tim (Instruksi Bahasa Indonesia)
+**Tujuan**: Mendapatkan update terbaru dengan aman tanpa menimpa pekerjaan Anda sendiri.
+
+**Pesan untuk dikirim ke Team
+
+> "Halo, update  telah di-push update ke branch `staging/hardware-free` (Gesture Engine & CV Pipeline). Mohon update branch lokal saudara saudara sekalian di komputer local
+
+**Perintah Update Aman (Jika TIDAK ADA perubahan di laptop Anda):**
+```powershell
+git checkout staging/hardware-free
+git pull origin staging/hardware-free
+```
+
+**Perintah Update Aman (Jika ADA perubahan/codingan belum selesai di laptop Anda):**
+```powershell
+# 1. Simpan perubahan Anda sementara (stash)
+git stash save "codingan_saya_pending"
+
+# 2. Ambil update dari server
+git checkout staging/hardware-free
+git pull origin staging/hardware-free
+
+# 3. Terapkan kembali codingan Anda
+git stash pop
+```
+*(Jika muncul error "Merge Conflict" setelah `git stash pop`, segera hubungi Rangga)*.
+
+---
+
+
 ## 3. Critical Rules for the Team
 1.  **NEVER Force Push**: Do not use `git push -f` or `--force`.
 2.  **Pull Before Push**: Always run `git pull` before trying to push your code.
 3.  **Branching**: Don't commit directly to `staging/*` or `main`. Create your own branch: `git checkout -b feature/my-feature-name`.
+
+## Bahasa indonesia translate
+
+## 1. Aturan Kritis untuk Tim
+1.  **Jangan pernah force push**: Jangan gunakan `git push -f` atau `--force`.
+2.  **Pull sebelum push**: Jalankan `git pull` sebelum mencoba untuk push kode kamu.
+3.  **Branching**: Jangan commit langsung ke `staging/*` atau `main`. Buat cabang sendiri: `git checkout -b fitur/nama-fitur-anda`.
+
+
