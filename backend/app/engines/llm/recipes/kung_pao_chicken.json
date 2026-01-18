@@ -1,0 +1,62 @@
+{
+    "id": "kung_pao_chicken",
+    "title": "Kung Pao Chicken",
+    "description": "A spicy, stir-fried Chinese dish made with chicken, peanuts, vegetables, and chili peppers.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 10,
+    "servings": 4,
+    "difficulty": "Medium",
+    "cuisine": "Szechuan",
+    "ingredients": [
+        {
+            "name": "Chicken Breast",
+            "amount": 500,
+            "unit": "g",
+            "notes": "diced"
+        },
+        {
+            "name": "Peanuts",
+            "amount": 50,
+            "unit": "g",
+            "notes": "roasted"
+        },
+        {
+            "name": "Dried Red Chilis",
+            "amount": 10,
+            "unit": "pcs"
+        },
+        {
+            "name": "Szechuan Peppercorns",
+            "amount": 1,
+            "unit": "tsp"
+        },
+        {
+            "name": "Soy Sauce",
+            "amount": 2,
+            "unit": "tbsp"
+        },
+        {
+            "name": "Rice Vinegar",
+            "amount": 1,
+            "unit": "tbsp"
+        }
+    ],
+    "instructions": [
+        {
+            "step": 1,
+            "description": "Marinate diced chicken with soy sauce and cornstarch."
+        },
+        {
+            "step": 2,
+            "description": "Stir-fry dried chilis and Szechuan peppercorns until fragrant."
+        },
+        {
+            "step": 3,
+            "description": "Add chicken and stir-fry until browned."
+        },
+        {
+            "step": 4,
+            "description": "Mix in peanuts and sauce, toss until coated."
+        }
+    ]
+}

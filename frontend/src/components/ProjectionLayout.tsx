@@ -4,7 +4,7 @@ interface ProjectionLayoutProps {
     children: React.ReactNode;
 }
 
-import { useWebSocket } from '../../context/WebSocketContext';
+import { useWebSocket } from '../context/WebSocketContext';
 
 export const ProjectionLayout: React.FC<ProjectionLayoutProps> = ({ children }) => {
     const { lastMessage } = useWebSocket();

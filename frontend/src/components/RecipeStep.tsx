@@ -8,7 +8,7 @@ interface RecipeStepProps {
 
 export const RecipeStep: React.FC<RecipeStepProps> = ({ stepNumber, instruction }) => {
     return (
-        <div className="absolute top-20 left-20 max-w-4xl z-10">
+        <div className="fixed top-20 left-20 max-w-4xl z-[90]">
             <AnimatePresence mode="wait">
                 <motion.div
                     key={stepNumber}

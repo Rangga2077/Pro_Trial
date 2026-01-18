@@ -1,0 +1,61 @@
+{
+    "id": "mapo_tofu",
+    "title": "Mapo Tofu",
+    "description": "Popular Szechuan dish consisting of tofu set in a spicy sauce, typically a thin, oily, and bright red suspension.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 15,
+    "servings": 3,
+    "difficulty": "Medium",
+    "cuisine": "Szechuan",
+    "ingredients": [
+        {
+            "name": "Soft Tofu",
+            "amount": 1,
+            "unit": "block",
+            "notes": "cubed"
+        },
+        {
+            "name": "Ground Pork",
+            "amount": 100,
+            "unit": "g"
+        },
+        {
+            "name": "Doubanjiang (Spicy Bean Paste)",
+            "amount": 2,
+            "unit": "tbsp"
+        },
+        {
+            "name": "Szechuan Peppercorn Powder",
+            "amount": 1,
+            "unit": "tsp"
+        },
+        {
+            "name": "Green Onions",
+            "amount": 2,
+            "unit": "stalks",
+            "notes": "chopped"
+        }
+    ],
+    "instructions": [
+        {
+            "step": 1,
+            "description": "Blanch tofu cubes in lightly salted water."
+        },
+        {
+            "step": 2,
+            "description": "Fry ground pork until browned."
+        },
+        {
+            "step": 3,
+            "description": "Add Doubanjiang and stir-fry until oil turns red."
+        },
+        {
+            "step": 4,
+            "description": "Add tofu and water, simmer for 5 minutes."
+        },
+        {
+            "step": 5,
+            "description": "Thicken with cornstarch slurry and sprinkle with peppercorn powder."
+        }
+    ]
+}

@@ -1,0 +1,53 @@
+{
+    "id": "fried_rice",
+    "title": "Yangzhou Fried Rice",
+    "description": "A famous Chinese-style fried rice from Yangzhou.",
+    "prep_time_minutes": 10,
+    "cook_time_minutes": 10,
+    "servings": 2,
+    "difficulty": "Easy",
+    "cuisine": "Huaiyang",
+    "ingredients": [
+        {
+            "name": "Cooked Rice",
+            "amount": 400,
+            "unit": "g",
+            "notes": "day-old works best"
+        },
+        {
+            "name": "Eggs",
+            "amount": 2,
+            "unit": "pcs"
+        },
+        {
+            "name": "Ham",
+            "amount": 50,
+            "unit": "g",
+            "notes": "diced"
+        },
+        {
+            "name": "Peas and Carrots",
+            "amount": 50,
+            "unit": "g"
+        },
+        {
+            "name": "Soy Sauce",
+            "amount": 1,
+            "unit": "tbsp"
+        }
+    ],
+    "instructions": [
+        {
+            "step": 1,
+            "description": "Scramble eggs in a wok and set aside."
+        },
+        {
+            "step": 2,
+            "description": "Stir-fry ham and vegetables."
+        },
+        {
+            "step": 3,
+            "description": "Add rice and break up clumps. Toss with soy sauce and eggs."
+        }
+    ]
+}

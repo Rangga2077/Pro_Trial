@@ -17,8 +17,10 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     useEffect(() => {
         // Connect to the backend WebSocket
-        const ws = new WebSocket('ws://localhost:8000/ws/ws');
+        const ws = new WebSocket('ws://localhost:8000/ws/');
         wsRef.current = ws;
+
+        ws.onerror = (e) => console.error("WebSocket Error:", e);
 
         ws.onopen = () => {
             console.log('WebSocket Connected');

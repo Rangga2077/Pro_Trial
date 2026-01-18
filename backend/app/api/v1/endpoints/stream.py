@@ -30,9 +30,12 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-@router.websocket("/ws")
+@router.websocket("/")
 async def websocket_endpoint(websocket: WebSocket):
+    print("WS: Connection attempt...")
     await manager.connect(websocket)
+    print("WS: Client connected")
+    print("WS: Client connected")
     try:
         from app.engines.llm.router import llm_router # Lazy import to avoid circular dependency with pipeline if any
         
@@ -59,4 +62,10 @@ async def websocket_endpoint(websocket: WebSocket):
                 
     except WebSocketDisconnect:
         manager.disconnect(websocket)
+        print("WS: Client disconnected")
         await manager.broadcast_json({"type": "status", "data": "Client left"})
+    except Exception as e:
+        print(f"WS Error: {e}")
+        import traceback
+        traceback.print_exc()
+        manager.disconnect(websocket)

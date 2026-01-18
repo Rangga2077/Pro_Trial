@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { useWebSocket } from '../../context/WebSocketContext';
+import { useWebSocket } from '../context/WebSocketContext';
 
 export const OverlayCanvas: React.FC = () => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -15,16 +15,24 @@ export const OverlayCanvas: React.FC = () => {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         if (lastMessage && lastMessage.type === 'cv_update') {
-            // Draw bounding boxes (simulated)
-            // In real app, iterate over lastMessage.data.objects
-            ctx.strokeStyle = '#00FF00';
-            ctx.lineWidth = 4;
-            // Example box
-            ctx.strokeRect(100, 100, 200, 150);
+            const objects = lastMessage.data.objects || [];
 
-            ctx.fillStyle = '#00FF00';
-            ctx.font = '24px Arial';
-            ctx.fillText('Bowl', 100, 90);
+            objects.forEach((obj: any) => {
+                // Skip rendering for "person" detection as requested
+                if (obj.label.toLowerCase() === 'person') return;
+
+                const [x1, y1, x2, y2] = obj.bbox;
+                const width = x2 - x1;
+                const height = y2 - y1;
+
+                ctx.strokeStyle = '#00FF00';
+                ctx.lineWidth = 4;
+                ctx.strokeRect(x1, y1, width, height);
+
+                ctx.fillStyle = '#00FF00';
+                ctx.font = '24px Arial';
+                ctx.fillText(`${obj.label} (${Math.round(obj.confidence * 100)}%)`, x1, y1 - 10);
+            });
         }
     }, [lastMessage]);
 

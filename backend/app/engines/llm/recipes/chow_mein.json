@@ -1,0 +1,53 @@
+{
+    "id": "chow_mein",
+    "title": "Chow Mein",
+    "description": "Classic stir-fried noodles with vegetables and chicken.",
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 10,
+    "servings": 2,
+    "difficulty": "Easy",
+    "cuisine": "Cantonese",
+    "ingredients": [
+        {
+            "name": "Egg Noodles",
+            "amount": 200,
+            "unit": "g"
+        },
+        {
+            "name": "Cabbage",
+            "amount": 100,
+            "unit": "g",
+            "notes": "shredded"
+        },
+        {
+            "name": "Carrots",
+            "amount": 1,
+            "unit": "pc",
+            "notes": "julienned"
+        },
+        {
+            "name": "Chicken Breast",
+            "amount": 150,
+            "unit": "g"
+        },
+        {
+            "name": "Dark Soy Sauce",
+            "amount": 1,
+            "unit": "tbsp"
+        }
+    ],
+    "instructions": [
+        {
+            "step": 1,
+            "description": "Boil noodles until al dente and drain."
+        },
+        {
+            "step": 2,
+            "description": "Stir-fry chicken and vegetables in a wok."
+        },
+        {
+            "step": 3,
+            "description": "Add noodles and soy sauce, toss on high heat."
+        }
+    ]
+}

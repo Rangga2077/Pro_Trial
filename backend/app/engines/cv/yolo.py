@@ -28,6 +28,10 @@ class YOLOModel:
                 cls = int(box.cls[0].item())
                 label = self.model.names[cls]
                 
+                # Filter out person detection as requested
+                if label.lower() == 'person':
+                    continue
+                    
                 detections.append({
                     "bbox": [x1, y1, x2, y2],
                     "confidence": conf,

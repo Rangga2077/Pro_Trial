@@ -1,0 +1,54 @@
+{
+    "id": "spring_rolls",
+    "title": "Spring Rolls",
+    "description": "Crispy fried rolls filled with vegetables and meat.",
+    "prep_time_minutes": 40,
+    "cook_time_minutes": 15,
+    "servings": 5,
+    "difficulty": "Medium",
+    "cuisine": "Cantonese",
+    "ingredients": [
+        {
+            "name": "Spring Roll Wrappers",
+            "amount": 20,
+            "unit": "pcs"
+        },
+        {
+            "name": "Cabbage",
+            "amount": 200,
+            "unit": "g",
+            "notes": "shredded"
+        },
+        {
+            "name": "Carrots",
+            "amount": 100,
+            "unit": "g",
+            "notes": "shredded"
+        },
+        {
+            "name": "Shrimp",
+            "amount": 100,
+            "unit": "g",
+            "notes": "minced"
+        },
+        {
+            "name": "Shiitake Mushrooms",
+            "amount": 4,
+            "unit": "pcs"
+        }
+    ],
+    "instructions": [
+        {
+            "step": 1,
+            "description": "Stir-fry vegetables and shrimp for the filling."
+        },
+        {
+            "step": 2,
+            "description": "Place filling on wrapper and roll up tightly."
+        },
+        {
+            "step": 3,
+            "description": "Deep fry until golden brown and crispy."
+        }
+    ]
+}

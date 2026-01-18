@@ -1,9 +1,9 @@
 import './App.css'
 import { WebSocketProvider, useWebSocket } from './context/WebSocketContext'
-import { ProjectionLayout } from './features/projection/ProjectionLayout'
-import { RecipeManager } from './features/projection/RecipeManager'
-import { OverlayCanvas } from './features/projection/OverlayCanvas'
-import { VoiceStatus } from './features/projection/VoiceStatus'
+import { ProjectionLayout } from './components/ProjectionLayout'
+import { RecipeManager } from './components/RecipeManager'
+import { OverlayCanvas } from './components/OverlayCanvas'
+import { VoiceStatus } from './components/VoiceStatus'
 
 function StatusIndicator() {
   const { isConnected, lastMessage } = useWebSocket();

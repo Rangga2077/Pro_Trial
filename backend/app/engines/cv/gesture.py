@@ -56,13 +56,21 @@ class GestureRecognizer:
 
             # Process results
             if detection_result.hand_landmarks:
-                for hand_landmarks in detection_result.hand_landmarks:
+                for i, hand_landmarks in enumerate(detection_result.hand_landmarks):
                     # hand_landmarks is a list of NormalizedLandmark objects
                     
+                    # Get handedness
+                    handedness = "Unknown"
+                    if detection_result.handedness and i < len(detection_result.handedness):
+                        handedness = detection_result.handedness[i][0].category_name # "Left" or "Right"
+
                     # Analyze gestures
                     gesture = self.analyze_gesture_task(hand_landmarks)
-                    if gesture != "UNKNOWN":
-                        gestures.append(gesture)
+                    
+                    gestures.append({
+                        "hand": handedness,
+                        "gesture": gesture
+                    })
                     
                     # Store for viz
                     visualization_data.append(hand_landmarks)
@@ -78,9 +86,6 @@ class GestureRecognizer:
         Analyze MediaPipe landmarks (Tasks API).
         landmarks: list of NormalizedLandmark objects (x, y, z)
         """
-        # Convert to list of dicts or just access directly
-        # lms[i].x, lms[i].y
-        
         # Helper: extended?
         # Index (8) Tip Y < PIP (6) Y
         index_ext = landmarks[8].y < landmarks[6].y
@@ -88,21 +93,44 @@ class GestureRecognizer:
         ring_ext = landmarks[16].y < landmarks[14].y
         pinky_ext = landmarks[20].y < landmarks[18].y
         
-        # Thumb heuristic: Tip x/y logic is tricky.
-        # Let's count fingers
+        # Thumb heuristic: check if tip (4) is further from palm (0) than IP (2)
+        # For simplicity, we'll stick to the 4 main fingers for count-based gestures
+        # but let's count them accurately.
+        
         finger_count = 0
         if index_ext: finger_count += 1
         if middle_ext: finger_count += 1
         if ring_ext: finger_count += 1
         if pinky_ext: finger_count += 1
         
-        # OPEN_PALM: 4 fingers up
-        if finger_count >= 4:
-            return "OPEN_PALM"
+        # FIVE_FINGERS: Exactly 5 fingers up (including thumb)
+        if finger_count == 4 and (not index_ext and not middle_ext and not ring_ext and not pinky_ext): # Wait, finger_count only checks 4. 
+            # Let's adjust finger_count to include thumb
+            pass
+        
+        # Simple update: Increase finger count detection
+        thumb_ext = landmarks[4].x < landmarks[3].x if landmarks[4].x < landmarks[0].x else landmarks[4].x > landmarks[3].x # Rough thumb check
+        total_fingers = finger_count + (1 if thumb_ext else 0)
+
+        # FIVE_FINGERS
+        if total_fingers >= 5:
+            return "FIVE_FINGERS"
             
-        # POINTING: Index up, others down
-        if index_ext and (not middle_ext) and (not ring_ext) and (not pinky_ext):
+        # CLOSED_PALM / FIST: 0 fingers up
+        if total_fingers == 0:
+            return "CLOSED_PALM"
+            
+        # POINTING / ONE_FINGER: Exactly index up
+        if total_fingers == 1 and index_ext:
             return "POINTING"
+            
+        # THREE_FINGERS: Exactly 3 fingers up
+        if total_fingers == 3:
+            return "THREE_FINGERS"
+            
+        # OPEN_PALM: 4 fingers up
+        if total_fingers == 4:
+            return "OPEN_PALM"
             
         return "UNKNOWN"
 
