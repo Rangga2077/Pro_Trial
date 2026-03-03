@@ -1,6 +1,7 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from typing import List
 import json
+import asyncio
 # Import router locally inside endpoint to avoid circular import if needed, 
 # but better to import at top if possible. 
 # However, stream.py is imported by pipeline.py, and pipeline might be used by main.
@@ -38,18 +39,24 @@ async def websocket_endpoint(websocket: WebSocket):
     print("WS: Client connected")
     try:
         from app.engines.llm.router import llm_router # Lazy import to avoid circular dependency with pipeline if any
-        
+
         while True:
-            data = await websocket.receive_text()
-            
+            # Use a short timeout so the event loop is free to run broadcast_json
+            # from the CV pipeline concurrently (Starlette cannot send+receive in
+            # parallel on the same socket from different coroutines if one blocks)
+            try:
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=0.05)
+            except asyncio.TimeoutError:
+                # No message from client this tick — perfectly normal.
+                continue
+
             # Assume data is a JSON string or plain text
-            # If JSON, parse it.
             try:
                 message = json.loads(data)
                 query = message.get("query")
-            except:
+            except Exception:
                 query = data
-            
+
             if query:
                 response = await llm_router.route_query(query)
                 await manager.broadcast_json({
@@ -59,7 +66,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         "response": response
                     }
                 })
-                
+
     except WebSocketDisconnect:
         manager.disconnect(websocket)
         print("WS: Client disconnected")

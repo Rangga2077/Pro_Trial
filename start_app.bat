@@ -7,7 +7,7 @@ echo Starting Backend Server...
 start "CoCI Backend" cmd /k "cd backend && call venv\Scripts\activate && python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
 
 :: Wait a moment for backend to initialize
-timeout /t 3 /nobreak >nul
+timeout /t 10 /nobreak >nul
 
 :: Start Frontend
 echo Starting Frontend (Electron)...

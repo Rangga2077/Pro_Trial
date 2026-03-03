@@ -18,7 +18,7 @@ export const ProjectionLayout: React.FC<ProjectionLayoutProps> = ({ children }) 
                     <img
                         src={`data:image/jpeg;base64,${videoFrame}`}
                         alt="Camera Feed"
-                        className="w-full h-full object-cover opacity-50"
+                        className="w-full h-full object-cover opacity-100"
                     />
                 </div>
             )}

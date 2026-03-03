@@ -15,24 +15,9 @@ export const OverlayCanvas: React.FC = () => {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         if (lastMessage && lastMessage.type === 'cv_update') {
-            const objects = lastMessage.data.objects || [];
-
-            objects.forEach((obj: any) => {
-                // Skip rendering for "person" detection as requested
-                if (obj.label.toLowerCase() === 'person') return;
-
-                const [x1, y1, x2, y2] = obj.bbox;
-                const width = x2 - x1;
-                const height = y2 - y1;
-
-                ctx.strokeStyle = '#00FF00';
-                ctx.lineWidth = 4;
-                ctx.strokeRect(x1, y1, width, height);
-
-                ctx.fillStyle = '#00FF00';
-                ctx.font = '24px Arial';
-                ctx.fillText(`${obj.label} (${Math.round(obj.confidence * 100)}%)`, x1, y1 - 10);
-            });
+            // We no longer draw objects/gestures here.
+            // The backend handles drawing all annotations directly onto the video frame,
+            // which is then displayed via the <img src="data:image/jpeg;base64,..."> in ProjectionLayout.
         }
     }, [lastMessage]);
 
