@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from app.core.config import settings
 from app.core.logging import setup_logging
-from app.api.v1.endpoints import endpoints, stream, recipes
+from app.api.v1.endpoints import endpoints, stream, recipes, camera
 
 setup_logging()
 
@@ -31,6 +31,7 @@ app.add_middleware(
 
 app.include_router(endpoints.router, prefix=settings.API_V1_STR)
 app.include_router(recipes.router, prefix=f"{settings.API_V1_STR}/recipes", tags=["recipes"])
+app.include_router(camera.router, prefix=f"{settings.API_V1_STR}/camera", tags=["camera"])
 app.include_router(stream.router, prefix="/ws")
 
 

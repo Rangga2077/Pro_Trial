@@ -1,11 +1,13 @@
-import { app, BrowserWindow, session } from 'electron';
+import { app, BrowserWindow, session, screen, ipcMain } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const isDev = !!process.env.VITE_DEV_SERVER_URL;
+// Keep a global reference of the window object
+let mainWindow = null;
 function createWindow() {
-    const win = new BrowserWindow({
+    mainWindow = new BrowserWindow({
         width: 1200,
         height: 800,
         show: false, // Don't show until ready-to-show fires, prevents black flash
@@ -33,20 +35,40 @@ function createWindow() {
         const allowedPermissions = ['media', 'camera', 'microphone', 'videoCapture', 'audioCapture'];
         return allowedPermissions.includes(permission);
     });
-    win.once('ready-to-show', () => {
-        win.show();
+    mainWindow.once('ready-to-show', () => {
+        mainWindow?.show();
     });
     if (isDev) {
-        win.loadURL(process.env.VITE_DEV_SERVER_URL);
+        mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
         // Uncomment the line below to open DevTools for debugging:
-        // win.webContents.openDevTools();
+        // mainWindow.webContents.openDevTools();
     }
     else {
-        win.loadFile(path.join(__dirname, '../dist/index.html'));
+        mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
     }
 }
 app.whenReady().then(() => {
     createWindow();
+    // IPC Handlers for Multiple Displays (Projector Support)
+    ipcMain.handle('get-displays', () => {
+        return screen.getAllDisplays().map(d => ({
+            id: d.id,
+            bounds: d.bounds,
+            size: d.size,
+            isPrimary: d.id === screen.getPrimaryDisplay().id
+        }));
+    });
+    ipcMain.handle('move-to-display', (event, displayId) => {
+        if (!mainWindow)
+            return { success: false, error: 'No main window' };
+        const targetDisplay = screen.getAllDisplays().find(d => d.id === displayId);
+        if (targetDisplay) {
+            mainWindow.setBounds(targetDisplay.bounds);
+            mainWindow.setFullScreen(true);
+            return { success: true };
+        }
+        return { success: false, error: 'Display not found' };
+    });
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {
             createWindow();

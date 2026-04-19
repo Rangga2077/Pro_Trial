@@ -5,6 +5,10 @@ __pycache__/
 venv/
 .env
 
+# Weights / ML Models
+*.pt
+*.task
+
 # OS
 .DS_Store
 Thumbs.db

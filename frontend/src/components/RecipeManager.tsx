@@ -66,8 +66,8 @@ export const RecipeManager: React.FC = () => {
         }
 
         // Special Dual Trigger Check (Left Index & Right Index)
-        const hasLeftIndex = gestures.some((g: any) => g.hand === 'Left' && g.gesture === 'POINTING');
-        const hasRightIndex = gestures.some((g: any) => g.hand === 'Right' && g.gesture === 'POINTING');
+        const hasLeftIndex = gestures.some((g: any) => g.hand === 'Left' && g.gesture === 'POINTING_UP');
+        const hasRightIndex = gestures.some((g: any) => g.hand === 'Right' && g.gesture === 'POINTING_UP');
 
         const now = Date.now();
 
@@ -126,9 +126,9 @@ export const RecipeManager: React.FC = () => {
         if (isMenuOpen) {
             if (gesture === 'FIVE_FINGERS' || gesture === 'OPEN_PALM') {
                 setIsMenuOpen(false);
-            } else if (gesture === 'POINTING') {
+            } else if (gesture === 'POINTING_UP') {
                 setSelectedIndex(prev => (prev + 1) % recipes.length);
-            } else if (gesture === 'CLOSED_PALM') {
+            } else if (gesture === 'CLOSED_FIST') {
                 const selected = recipes[selectedIndex];
                 setCurrentRecipe(selected);
                 setCurrentStepIndex(0);
@@ -139,7 +139,7 @@ export const RecipeManager: React.FC = () => {
                 if (currentStepIndex < currentRecipe.instructions.length - 1) {
                     setCurrentStepIndex(prev => prev + 1);
                 }
-            } else if (gesture === 'POINTING') {
+            } else if (gesture === 'POINTING_UP') {
                 if (currentStepIndex > 0) {
                     setCurrentStepIndex(prev => prev - 1);
                 }
@@ -265,7 +265,7 @@ export const RecipeManager: React.FC = () => {
                     {lastGestures.length > 0 ? lastGestures.map((g, i) => (
                         <div key={i} className="flex items-center gap-4 bg-white/5 p-3 rounded-2xl">
                             <span className="text-2xl">
-                                {g.gesture === 'POINTING' ? '☝️' : g.gesture === 'CLOSED_PALM' ? '✊' : g.gesture === 'FIVE_FINGERS' ? '🖐️' : '✋'}
+                                {g.gesture === 'POINTING_UP' ? '☝️' : g.gesture === 'CLOSED_FIST' ? '✊' : g.gesture === 'FIVE_FINGERS' ? '🖐️' : '✋'}
                             </span>
                             <div>
                                 <p className="text-[10px] text-gray-500 font-bold uppercase">{g.hand} Hand</p>
