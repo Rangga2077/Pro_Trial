@@ -1,5 +1,6 @@
 import './App.css'
-import { WebSocketProvider, useWebSocket } from './context/WebSocketContext'
+import { WebSocketProvider } from './context/WebSocketProvider'
+import { useWebSocket } from './context/useWebSocket'
 import { ProjectionLayout } from './components/ProjectionLayout'
 import { RecipeManager } from './components/RecipeManager'
 import { OverlayCanvas } from './components/OverlayCanvas'
@@ -7,7 +8,7 @@ import { VoiceStatus } from './components/VoiceStatus'
 import { DisplaySettings } from './components/DisplaySettings'
 
 function StatusIndicator() {
-  const { isConnected, lastMessage } = useWebSocket();
+  const { isConnected } = useWebSocket();
   return (
     <div className="fixed top-4 right-4 p-2 bg-gray-800 rounded shadow z-[9999]">
       <div className="flex items-center gap-2">

@@ -67,7 +67,7 @@ app.whenReady().then(() => {
         }));
     });
 
-    ipcMain.handle('move-to-display', (event, displayId: number) => {
+    ipcMain.handle('move-to-display', (_event, displayId: number) => {
         if (!mainWindow) return { success: false, error: 'No main window' };
         
         const targetDisplay = screen.getAllDisplays().find(d => d.id === displayId);

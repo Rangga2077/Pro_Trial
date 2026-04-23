@@ -67,9 +67,12 @@ class GestureRecognizer:
                     if top_gesture.category_name != "None" and top_gesture.score > 0.5:
                         gesture_name = top_gesture.category_name.upper()
 
+                index_tip = hand_landmarks[8] if len(hand_landmarks) > 8 else None
                 gestures.append({
                     "hand": handedness,
-                    "gesture": gesture_name
+                    "gesture": gesture_name,
+                    "index_x": index_tip.x if index_tip else None,
+                    "index_y": index_tip.y if index_tip else None
                 })
                 visualization_data.append((hand_landmarks, result.hand_world_landmarks[i] if result.hand_world_landmarks else None))
 

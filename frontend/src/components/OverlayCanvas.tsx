@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { useWebSocket } from '../context/WebSocketContext';
+import { useWebSocket } from '../context/useWebSocket';
 
 export const OverlayCanvas: React.FC = () => {
     const canvasRef = useRef<HTMLCanvasElement>(null);

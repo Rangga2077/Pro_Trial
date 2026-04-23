@@ -58,7 +58,7 @@ app.whenReady().then(() => {
             isPrimary: d.id === screen.getPrimaryDisplay().id
         }));
     });
-    ipcMain.handle('move-to-display', (event, displayId) => {
+    ipcMain.handle('move-to-display', (_event, displayId) => {
         if (!mainWindow)
             return { success: false, error: 'No main window' };
         const targetDisplay = screen.getAllDisplays().find(d => d.id === displayId);

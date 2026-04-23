@@ -1,7 +1,6 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 import cv2
-from app.engines.cv.pipeline import cv_pipeline
 from app.core.config import settings
 
 router = APIRouter()
@@ -30,6 +29,7 @@ async def select_camera(req: CameraSelectRequest):
     """
     # Temporarily override settings
     settings.CAMERA_INDEX = req.index
+    from app.engines.cv.pipeline import cv_pipeline
     
     if cv_pipeline.running:
         cv_pipeline.stop()

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query
 from typing import List, Optional
 from app.schemas.recipe import Recipe, RecipeCreate, RecipeUpdate
-from app.engines.llm.recipes.recipe_loader import recipe_loader
+from app.services.recipe_loader import recipe_loader
 
 router = APIRouter()
 

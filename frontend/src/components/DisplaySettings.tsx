@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import type { ElectronDisplay } from '../types/electron';
 
 export const DisplaySettings: React.FC = () => {
-    const [displays, setDisplays] = useState<any[]>([]);
+    const [displays, setDisplays] = useState<ElectronDisplay[]>([]);
     const [isOpen, setIsOpen] = useState(false);
     const [error, setError] = useState<string>('');
 
@@ -26,8 +27,8 @@ export const DisplaySettings: React.FC = () => {
             } else {
                 setIsOpen(false); // Close upon success
             }
-        } catch (err: any) {
-            setError(err.message || String(err));
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : String(err));
         }
     };
 

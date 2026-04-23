@@ -1,174 +1,130 @@
-# CoCI Project (Hardware-Free Branch) - Testing Guide
+# CoCI Project - Hardware-Free Testing Guide
 
-This branch (`hardware-free`) supports development and testing using standard laptop hardware (webcam) without requiring the specialized projector/camera setup.
+CoCI is a local interactive cooking prototype. The backend captures camera frames, runs CV/gesture processing, converts noisy raw gestures into action events, and streams updates to an Electron React frontend.
 
----
+## Current Architecture
 
-## 🔄 System Workflow & Architecture
+### Backend
+- FastAPI app entry point: `backend/app/main.py`
+- REST API prefix: `http://localhost:8000/api/v1`
+- WebSocket route: `ws://localhost:8000/ws/`
+- Recipe data: `data/recipes`
+- Realtime connection service: `backend/app/services/realtime.py`
+- Gesture action interpreter: `backend/app/services/gesture_actions.py`
+- Recipe file store: `backend/app/services/recipe_loader.py`
 
-The CoCI system is designed as a real-time interactive loop. Here is a simple explanation of how the code interacts:
+### Frontend
+- React/Vite source: `frontend/src`
+- Electron main/preload source: `frontend/electron`
+- Frontend API config: `frontend/src/config.ts`
+- Shared TypeScript contracts: `frontend/src/types/contracts.ts`
 
-### 1. Sensing (Backend)
-- **Entry Point**: `backend/app/main.py` initializes the FastAPI server and starts the Computer Vision (CV) pipeline.
-- **CV Pipeline**: The system captures video from your webcam. It uses AI models (e.g., YOLO) to "see" objects and gestures in the frame.
-
-### 2. Computation (Backend)
-- **Logic**: The backend processes the visual data. If you interact (e.g., ask a question via voice/text), it routes the request to an **LLM** (Large Language Model) like Ollama for intelligent responses.
-- **API**: `FastAPI` handles all logic and prepares data for the frontend.
-
-### 3. Communication (WebSocket)
-- **The Bridge**: A **WebSocket** connection (`ws://localhost:8000/ws/ws`) is established between the Backend and Frontend.
-- **Real-Time Data**: The backend pushes processed video frames, detection data, and AI responses to the frontend instantly.
-
-### 4. Actuation & Display (Frontend)
-- **React + Electron**: The frontend (`frontend/src`) receives the data stream.
-- **Visualization**: It draws the video feed, overlays bounding boxes for detected objects, and displays text/voice responses from the AI.
-- **User Interface**: You interact with this unified Electron window.
+### Data Flow
+1. `CVPipeline` reads frames from the configured camera.
+2. YOLO produces object detections.
+3. MediaPipe produces raw hand gestures.
+4. The backend gesture interpreter converts raw gestures into action events such as `START_APP`, `MENU_NEXT`, or `SELECT_RECIPE`.
+5. The realtime service broadcasts `cv_update` messages to the frontend.
+6. React consumes final action events instead of interpreting raw model gestures.
 
 ## Prerequisites
 
-Before you begin, ensure you have the following installed:
-- **Python 3.8+**
-- **Node.js (v18+)** & **npm**
-- **Git**
-- **Webcam**: A functioning built-in or USB webcam is required for the "hardware-free" CV pipeline simulation.
+- Python 3.8+
+- Node.js 18+ and npm
+- Git
+- Webcam
+- Optional for LLM features: Ollama with `llama3.2`
 
----
+## Configuration
 
-##  Installation & Setup
+Backend settings are read from `backend/.env` when present.
 
-### 0. Clone & Checkout (For Team Members)
-1. Clone the repository:
-   ```bash
-   git clone <repository_url>
-   cd Pro_Trial
-   ```
-2. Switch to the `hardware-free` branch:
-   ```bash
-   git checkout hardware-free
-   ```
-
-### 1. Backend Setup (FastAPI)
-
-1. **Install and Run Ollama (Required for LLM features):**
-   - Download and install [Ollama](https://ollama.com/).
-   - Pull the required model:
-     ```bash
-     ollama pull llama3.2
-     ```
-   - Ensure the Ollama server is running (usually on `localhost:11434`).
-
-2. Navigate to the backend directory:
-   ```bash
-   cd backend
-   ```
-
-3. Create a virtual environment:
-   ```bash
-   python -m venv venv
-   ```
-
-4. Activate the virtual environment:
-   - **Windows (PowerShell):**
-     ```powershell
-     .\venv\Scripts\Activate
-     ```
-   - **Unix/MacOS:**
-     ```bash
-     source venv/bin/activate
-     ```
-
-5. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-6. Run the backend server:
-   ```bash
-   uvicorn app.main:app --reload --port 8000
-   ```
-   > You should see `CV Pipeline started.` in the terminal logs, indicating the webcam has been successfully accessed.
-
-### 2. Frontend Setup (React + Electron)
-
-1. Open a new terminal and navigate to the frontend directory:
-   ```bash
-   cd frontend
-   ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Run the application (Dev Mode):
-   ```bash
-   npm run electron:dev
-   ```
-   > This will start the Vite dev server and launch the Electron window.
-
----
-
-##  Testing Strategy
-
-Since this branch operates in "Hardware-Free" mode, testing focuses on verifying the software stack using your local webcam as the input source.
-
-### 1. Automated Testing
-
-The automated test suite is located in `backend/tests/`.
-
-To run the tests:
-```bash
-# From the backend directory
-pytest tests
+```env
+CAMERA_INDEX=0
+CAMERA_WIDTH=1280
+CAMERA_HEIGHT=720
+CV_PIPELINE_ENABLED=true
+GESTURE_ACTION_COOLDOWN_SECONDS=0.5
+GESTURE_SWIPE_THRESHOLD=0.20
+GESTURE_MONITOR_ENABLED=true
+GESTURE_MONITOR_SAMPLE_SECONDS=0.25
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.2
+RECIPE_DATA_DIR=../data/recipes
+CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 ```
 
-**Scope of Tests:**
-- **`test_engine1.py`**: Validates YOLO object detection logic (using mock/placeholder images).
-- **`test_engine2.py`**: Validates Gesture recognition logic.
-- **API Tests**: Verifies HTTP and WebSocket endpoints connect correctly.
+Frontend settings use Vite environment variables.
 
-> **Note:** If tests are currently empty, they serve as placeholders for future unit test definitions.
+```env
+VITE_API_BASE_URL=http://localhost:8000
+VITE_WS_URL=ws://localhost:8000/ws/
+```
 
-### 2. Manual Verification (Hardware-Free Workflow)
+## Backend Setup
 
-Follow these steps to manually verify the full system loop:
+```powershell
+cd backend
+python -m venv venv
+.\venv\Scripts\Activate
+pip install -r requirements.txt
+python -m uvicorn app.main:app --reload --port 8000
+```
 
-#### A. Connectivity Verification
-1. launch the app.
-2. Open the **Developer Tools** in Electron (Ctrl+Shift+I or Cmd+Option+I).
-3. Check the **Console** tab.
-   - OK Look for: `WebSocket Connected`.
-   - No OK If you see errors, failing to connect to `ws://localhost:8000/ws/ws`.
+The CV pipeline starts by default. For API-only development or tests, set `CV_PIPELINE_ENABLED=false`.
 
-#### B. Visual Pipeline Verification
-The backend sends processed frames to the frontend via WebSocket.
-1. Ensure your face/environment is visible in the application window's video feed.
-2. If the video is black or static, check the backend terminal for "Error: Could not open camera".
+## Frontend Setup
 
-#### C. Feature Testing (In Electron App)
-Perform these tests within the launched **Electron application window**, not in a standard web browser.
+```powershell
+cd frontend
+npm install
+npm run electron:dev
+```
 
-- **Object Detection**:
-  - Hold up common objects (e.g., **Cell Phone**, **Bottle**, **Cup**) to the camera.
-  - **Expected Result**: The system should draw bounding boxes or label the objects in the video feed (if visualization is enabled) or log detections in the console.
+This starts the Vite dev server and launches the Electron window.
 
-- **Gesture Recognition**:
-  - **Current Limitation**: Due to MediaPipe compatibility issues with Python 3.13, gesture recognition is currently using a dummy implementation. 
-  - **Expected Result**: You may see log messages indicating "using dummy implementation" in the backend console.
+## Verification
 
-- **LLM Interaction (Voice/Text)**:
-  - If the prompt interface is active, type or speak a query (e.g., "How do I cook this?").
-  - **Expected Result**: You should receive a text response streaming back from the backend (powered by local Llama 3.2).
-  - **Troubleshooting**: If you get "I'm sorry, I couldn't process that," ensure Ollama is running and `llama3.2` is pulled.
+Run frontend checks:
 
----
+```powershell
+cd frontend
+npm run build
+npm run lint
+```
 
-##  Troubleshooting
+Run backend smoke tests:
 
-| Issue | Possible Cause | Solution |
-|-------|----------------|----------|
-| **"Error: Could not open camera"** | Webcam is in use by another app (Zoom, Teams, etc.). | Close other camera apps and restart the backend. |
-| **Frontend displays nothing** | Backend server is not running. | Verify `uvicorn` is running on port 8000. |
-| **WebSocket connection failed** | Port mismatch. | Check `frontend/src/context/WebSocketContext.tsx` matches `ws://localhost:8000/ws/ws`. |
-| **LLM Fails to Respond** | Ollama not running/Model missing. | Run `ollama serve` and `ollama pull llama3.2`. |
+```powershell
+backend\venv\Scripts\python.exe -m pytest backend\tests -p no:cacheprovider
+```
+
+The `-p no:cacheprovider` flag avoids pytest cache writes in restricted Windows sandbox environments.
+
+## API Overview
+
+Recipe endpoints:
+- `GET /api/v1/recipes/`
+- `GET /api/v1/recipes/random`
+- `GET /api/v1/recipes/{recipe_id}`
+- `POST /api/v1/recipes/`
+- `PUT /api/v1/recipes/{recipe_id}`
+- `DELETE /api/v1/recipes/{recipe_id}`
+
+Camera endpoints:
+- `GET /api/v1/camera/devices`
+- `POST /api/v1/camera/select`
+
+WebSocket endpoint:
+- `ws://localhost:8000/ws/`
+
+See `docs/API_Contracts.md` for message shapes.
+
+## Troubleshooting
+
+| Issue | Likely Cause | Fix |
+| --- | --- | --- |
+| Frontend disconnected | Backend not running or `VITE_WS_URL` mismatch | Start FastAPI and confirm `ws://localhost:8000/ws/` |
+| No recipes shown | `RECIPE_DATA_DIR` points to an empty folder | Confirm JSON files exist in `data/recipes` |
+| Camera does not open | Webcam busy or wrong index | Close other camera apps or change `CAMERA_INDEX` |
+| LLM response fails | Ollama is not running or model missing | Start Ollama and pull the configured model |

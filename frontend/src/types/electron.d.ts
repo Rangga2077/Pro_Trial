@@ -1,6 +1,13 @@
+export interface ElectronDisplay {
+    id: number;
+    bounds: Electron.Rectangle;
+    size: Electron.Size;
+    isPrimary: boolean;
+}
+
 export interface IElectronAPI {
     sendMessage: (message: string) => void;
-    getDisplays: () => Promise<any[]>;
+    getDisplays: () => Promise<ElectronDisplay[]>;
     moveToDisplay: (displayId: number) => Promise<{success: boolean, error?: string}>;
 }
 

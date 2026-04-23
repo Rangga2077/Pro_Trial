@@ -3,10 +3,12 @@ import asyncio
 import base64
 import threading
 import time
-from app.api.v1.endpoints.stream import manager
 from app.engines.cv.yolo import yolo_model
 from app.engines.cv.gesture import gesture_recognizer, draw_landmarks_on_image
 from app.core.config import settings
+from app.schemas.contracts import CVUpdateData, CVUpdateMessage, Detection, GestureAction, RawGesture
+from app.services.gesture_actions import gesture_action_interpreter
+from app.services.realtime import realtime_service
 
 class ThreadedCamera:
     def __init__(self, src=0, width=1280, height=720):
@@ -70,6 +72,9 @@ class CVPipeline:
                 # 2. Gesture Recognition
                 # Using LIVE_STREAM, this returns the immediately available async results
                 gestures, landmarks = gesture_recognizer.recognize(frame)
+                raw_gestures = [RawGesture(**gesture) for gesture in gestures]
+                action = gesture_action_interpreter.interpret(raw_gestures)
+                action_payload = action if action != GestureAction.NO_ACTION else None
                 
                 # 3. Draw Annotations on Frame
                 if landmarks:
@@ -97,14 +102,15 @@ class CVPipeline:
                 frame_b64 = base64.b64encode(buffer).decode('utf-8')
 
                 # Broadcast data
-                await manager.broadcast_json({
-                    "type": "cv_update",
-                    "data": {
-                        "objects": detections,
-                        "gestures": gestures,
-                        "frame": frame_b64
-                    }
-                })
+                await realtime_service.broadcast(
+                    CVUpdateMessage(
+                        data=CVUpdateData(
+                            objects=[Detection(**detection) for detection in detections],
+                            action=action_payload,
+                            frame=frame_b64,
+                        )
+                    )
+                )
             
             except Exception as e:
                 print(f"Error in CV Pipeline loop: {e}")

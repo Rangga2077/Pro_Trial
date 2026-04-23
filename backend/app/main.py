@@ -7,23 +7,30 @@ setup_logging()
 
 from contextlib import asynccontextmanager
 import asyncio
-from app.engines.cv.pipeline import cv_pipeline
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
-    task = asyncio.create_task(cv_pipeline.start())
+    task = None
+    cv_pipeline = None
+
+    if settings.CV_PIPELINE_ENABLED:
+        from app.engines.cv.pipeline import cv_pipeline as active_pipeline
+
+        cv_pipeline = active_pipeline
+        task = asyncio.create_task(cv_pipeline.start())
+
     yield
-    # Shutdown
-    cv_pipeline.stop()
-    await task
+
+    if cv_pipeline and task:
+        cv_pipeline.stop()
+        await task
 
 app = FastAPI(title=settings.PROJECT_NAME, lifespan=lifespan)
 
 from fastapi.middleware.cors import CORSMiddleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
