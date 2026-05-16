@@ -1,0 +1,61 @@
+{
+    "id": "sweet_and_sour_pork",
+    "title": "Sweet and Sour Pork",
+    "description": "A classic Cantonese dish with crispy pork nuggets tossed in a vibrant sweet and sour sauce.",
+    "prep_time_minutes": 30,
+    "cook_time_minutes": 20,
+    "servings": 4,
+    "difficulty": "Hard",
+    "cuisine": "Cantonese",
+    "ingredients": [
+        {
+            "name": "Pork Loin",
+            "amount": 400,
+            "unit": "g",
+            "notes": "cubed"
+        },
+        {
+            "name": "Bell Peppers",
+            "amount": 1,
+            "unit": "pc"
+        },
+        {
+            "name": "Pineapple Chunks",
+            "amount": 100,
+            "unit": "g"
+        },
+        {
+            "name": "Ketchup",
+            "amount": 3,
+            "unit": "tbsp"
+        },
+        {
+            "name": "Vinegar",
+            "amount": 2,
+            "unit": "tbsp"
+        },
+        {
+            "name": "Sugar",
+            "amount": 2,
+            "unit": "tbsp"
+        }
+    ],
+    "instructions": [
+        {
+            "step": 1,
+            "description": "Coat pork cubes in batter and double fry until crispy."
+        },
+        {
+            "step": 2,
+            "description": "Stir-fry bell peppers and pineapple."
+        },
+        {
+            "step": 3,
+            "description": "Make the sauce with ketchup, vinegar, and sugar."
+        },
+        {
+            "step": 4,
+            "description": "Combine everything and toss until coated."
+        }
+    ]
+}

@@ -1,0 +1,60 @@
+{
+    "id": "peking_duck",
+    "title": "Peking Duck",
+    "description": "A famous duck dish from Beijing that has been prepared since the imperial era.",
+    "prep_time_minutes": 120,
+    "cook_time_minutes": 90,
+    "servings": 6,
+    "difficulty": "Hard",
+    "cuisine": "Beijing",
+    "ingredients": [
+        {
+            "name": "Whole Duck",
+            "amount": 1,
+            "unit": "pc"
+        },
+        {
+            "name": "Maltose Syrup",
+            "amount": 2,
+            "unit": "tbsp"
+        },
+        {
+            "name": "Hoisin Sauce",
+            "amount": 100,
+            "unit": "g"
+        },
+        {
+            "name": "Spring Onion",
+            "amount": 4,
+            "unit": "stalks"
+        },
+        {
+            "name": "Cucumber",
+            "amount": 1,
+            "unit": "pc"
+        },
+        {
+            "name": "Peking Duck Pancakes",
+            "amount": 20,
+            "unit": "pcs"
+        }
+    ],
+    "instructions": [
+        {
+            "step": 1,
+            "description": "Clean duck and dry thoroughly. Glaze with maltose syrup."
+        },
+        {
+            "step": 2,
+            "description": "Let the duck dry in a cool place for 24 hours (simulated)."
+        },
+        {
+            "step": 3,
+            "description": "Roast until skin is crispy and golden brown."
+        },
+        {
+            "step": 4,
+            "description": "Slice duck and serve with pancakes, hoisin sauce, and vegetables."
+        }
+    ]
+}

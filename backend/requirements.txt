@@ -1,6 +1,10 @@
 fastapi
-uvicorn
+uvicorn[standard]
 pydantic
 pydantic-settings
 python-multipart
 httpx
+pytest
+opencv-python
+ultralytics>=8.3.0
+mediapipe

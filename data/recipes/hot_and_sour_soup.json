@@ -1,0 +1,62 @@
+{
+    "id": "hot_and_sour_soup",
+    "title": "Hot and Sour Soup",
+    "description": "A traditional Chinese soup with both spicy and sour flavors.",
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 15,
+    "servings": 4,
+    "difficulty": "Medium",
+    "cuisine": "Beijing/Szechuan",
+    "ingredients": [
+        {
+            "name": "Wood Ear Mushrooms",
+            "amount": 50,
+            "unit": "g"
+        },
+        {
+            "name": "Tofu",
+            "amount": 100,
+            "unit": "g",
+            "notes": "shredded"
+        },
+        {
+            "name": "Bamboo Shoots",
+            "amount": 50,
+            "unit": "g"
+        },
+        {
+            "name": "White Pepper",
+            "amount": 2,
+            "unit": "tsp"
+        },
+        {
+            "name": "Black Vinegar",
+            "amount": 3,
+            "unit": "tbsp"
+        },
+        {
+            "name": "Egg",
+            "amount": 1,
+            "unit": "pc",
+            "notes": "whisked"
+        }
+    ],
+    "instructions": [
+        {
+            "step": 1,
+            "description": "Boil mushrooms, tofu, and bamboo shoots in chicken stock."
+        },
+        {
+            "step": 2,
+            "description": "Add white pepper and black vinegar."
+        },
+        {
+            "step": 3,
+            "description": "Slowly pour in whisked egg to create ribbons."
+        },
+        {
+            "step": 4,
+            "description": "Thicken with cornstarch slurry and serve hot."
+        }
+    ]
+}
