@@ -9,6 +9,9 @@ from app.schemas.contracts import GestureAction, RawGesture
 class SwipeAnchor:
     x: float
     y: float
+    rearming: bool = False
+    fired_direction: str | None = None
+    missing_since: float | None = None
 
 
 @dataclass
@@ -70,6 +73,11 @@ class GestureActionInterpreter:
     required_frames: int = 3
     dual_trigger_frames: int = 10
     cooldown_seconds: float = settings.GESTURE_ACTION_COOLDOWN_SECONDS
+    menu_opposite_guard_seconds: float = 0.4
+    menu_swipe_release_seconds: float = 0.35
+    pointer_release_seconds: float = 0.25
+    pointer_repeat_seconds: float = 0.75
+    primary_release_seconds: float = 0.25
     trigger_cooldown_seconds: float = 2.0
     swipe_threshold: float = settings.GESTURE_SWIPE_THRESHOLD
     monitor_enabled: bool = settings.GESTURE_MONITOR_ENABLED
@@ -77,6 +85,11 @@ class GestureActionInterpreter:
     mode: str = "idle"
     gesture_counts: dict[str, int] = field(default_factory=dict)
     swipe_anchors: dict[str, SwipeAnchor] = field(default_factory=dict)
+    pointer_active_action: GestureAction | None = None
+    pointer_missing_since: float | None = None
+    pointer_last_action_at: float = 0.0
+    primary_active_gesture: str | None = None
+    primary_missing_since: float | None = None
     last_action_at: float = 0.0
     monitor: GestureMonitor = field(init=False)
 
@@ -91,7 +104,12 @@ class GestureActionInterpreter:
 
         if not gestures:
             self.gesture_counts.clear()
-            self.swipe_anchors.clear()
+            self._update_pointer_state(False, current_time)
+            self._update_primary_state(None, current_time)
+            if self.mode == "menu":
+                self._age_inactive_swipe_anchors(set(), current_time)
+            else:
+                self.swipe_anchors.clear()
             return GestureAction.NO_ACTION
 
         if self._has_dual_pointing_up(gestures):
@@ -100,11 +118,19 @@ class GestureActionInterpreter:
 
         self.gesture_counts["DUAL_TRIGGER"] = 0
 
+        pointer_action = self._detect_pointer_action(gestures, current_time)
+        if pointer_action != GestureAction.NO_ACTION:
+            return pointer_action
+
         swipe_action = self._detect_swipe_action(gestures, current_time)
         if swipe_action != GestureAction.NO_ACTION:
             return swipe_action
 
         primary_gesture = gestures[0].gesture
+        self._update_primary_state(primary_gesture, current_time)
+        if self.primary_active_gesture == primary_gesture:
+            return GestureAction.NO_ACTION
+
         self._count_only(primary_gesture)
 
         if self.gesture_counts[primary_gesture] <= self.required_frames:
@@ -118,10 +144,78 @@ class GestureActionInterpreter:
             return action
 
         self.last_action_at = current_time
+        self.primary_active_gesture = primary_gesture
+        self.primary_missing_since = None
         self.gesture_counts[primary_gesture] = 0
         return action
 
+    def _detect_pointer_action(self, gestures: list[RawGesture], current_time: float) -> GestureAction:
+        action = self._pointing_action(gestures)
+        if action == GestureAction.NO_ACTION:
+            self._update_pointer_state(False, current_time)
+            return GestureAction.NO_ACTION
+
+        self.pointer_missing_since = None
+        if self.pointer_active_action != action:
+            self.pointer_active_action = action
+            self.pointer_last_action_at = current_time
+            return action
+
+        return GestureAction.NO_ACTION
+
+    def _pointing_action(self, gestures: list[RawGesture]) -> GestureAction:
+        has_left = any(gesture.hand == "Left" and gesture.gesture == "POINTING_UP" for gesture in gestures)
+        has_right = any(gesture.hand == "Right" and gesture.gesture == "POINTING_UP" for gesture in gestures)
+
+        if self.mode == "menu" and has_left and not has_right:
+            return GestureAction.MENU_NEXT
+        if self.mode == "cooking" and has_right and not has_left:
+            return GestureAction.NEXT_STEP
+        if self.mode == "cooking" and has_left and not has_right:
+            return GestureAction.PREVIOUS_STEP
+        return GestureAction.NO_ACTION
+
+    def _update_pointer_state(self, is_pointing: bool, current_time: float):
+        if is_pointing:
+            self.pointer_missing_since = None
+            return
+
+        if self.pointer_active_action is None:
+            self.pointer_missing_since = None
+            return
+
+        if self.pointer_missing_since is None:
+            self.pointer_missing_since = current_time
+            return
+
+        if current_time - self.pointer_missing_since >= self.pointer_release_seconds:
+            self._reset_pointer_state()
+
+    def _update_primary_state(self, gesture: str | None, current_time: float):
+        if self.primary_active_gesture is None:
+            self.primary_missing_since = None
+            return
+
+        if gesture == self.primary_active_gesture:
+            self.primary_missing_since = None
+            return
+
+        if self.primary_missing_since is None:
+            self.primary_missing_since = current_time
+            return
+
+        if current_time - self.primary_missing_since >= self.primary_release_seconds:
+            self.primary_active_gesture = None
+            self.primary_missing_since = None
+
     def _detect_swipe_action(self, gestures: list[RawGesture], current_time: float) -> GestureAction:
+        if self.mode == "menu":
+            self.swipe_anchors.clear()
+            return GestureAction.NO_ACTION
+        if self.mode == "cooking":
+            self.swipe_anchors.clear()
+            return GestureAction.NO_ACTION
+
         pointing_gestures = [
             gesture
             for gesture in gestures
@@ -129,9 +223,7 @@ class GestureActionInterpreter:
         ]
 
         active_hands = {gesture.hand for gesture in pointing_gestures}
-        for hand in list(self.swipe_anchors):
-            if hand not in active_hands:
-                self.swipe_anchors.pop(hand, None)
+        self._age_inactive_swipe_anchors(active_hands, current_time)
 
         if len(pointing_gestures) != 1:
             return GestureAction.NO_ACTION
@@ -144,6 +236,16 @@ class GestureActionInterpreter:
         if anchor is None:
             self.swipe_anchors[gesture.hand] = SwipeAnchor(gesture.index_x, gesture.index_y)
             self.monitor.anchor(gesture.hand, gesture.index_x, gesture.index_y, self.mode)
+            return GestureAction.NO_ACTION
+
+        if anchor.rearming:
+            if self._has_returned_to_anchor(anchor, gesture.index_x, gesture.index_y):
+                self.swipe_anchors[gesture.hand] = SwipeAnchor(
+                    gesture.index_x,
+                    gesture.index_y,
+                    fired_direction=anchor.fired_direction,
+                )
+                self.monitor.anchor(gesture.hand, gesture.index_x, gesture.index_y, self.mode)
             return GestureAction.NO_ACTION
 
         dx = gesture.index_x - anchor.x
@@ -163,21 +265,88 @@ class GestureActionInterpreter:
         if direction is None:
             return GestureAction.NO_ACTION
 
+        elapsed = current_time - self.last_action_at
+        if (
+            self.mode == "menu"
+            and anchor.fired_direction is not None
+            and direction == self._opposite_direction(anchor.fired_direction)
+            and elapsed < self.menu_opposite_guard_seconds
+        ):
+            self.swipe_anchors[gesture.hand] = SwipeAnchor(
+                gesture.index_x,
+                gesture.index_y,
+                fired_direction=anchor.fired_direction,
+            )
+            return GestureAction.NO_ACTION
+
         self.monitor.observed_swipe(gesture.hand, direction, dx, dy, self.mode)
         action = self._map_swipe_direction(direction)
 
         if action == GestureAction.NO_ACTION:
             return action
 
-        elapsed = current_time - self.last_action_at
         if elapsed < self.cooldown_seconds:
+            if self.mode == "menu":
+                self.swipe_anchors[gesture.hand] = SwipeAnchor(
+                    gesture.index_x,
+                    gesture.index_y,
+                    fired_direction=anchor.fired_direction,
+                )
             self.monitor.blocked_by_cooldown(direction, elapsed, self.cooldown_seconds)
             return GestureAction.NO_ACTION
 
         self.last_action_at = current_time
-        self.swipe_anchors[gesture.hand] = SwipeAnchor(gesture.index_x, gesture.index_y)
+        self.swipe_anchors[gesture.hand] = SwipeAnchor(
+            anchor.x,
+            anchor.y,
+            rearming=True,
+            fired_direction=direction,
+        )
         self.monitor.fired(direction, action)
         return action
+
+    def _age_inactive_swipe_anchors(self, active_hands: set[str], current_time: float):
+        for hand, anchor in list(self.swipe_anchors.items()):
+            if hand in active_hands:
+                if anchor.missing_since is not None:
+                    self.swipe_anchors[hand] = SwipeAnchor(
+                        anchor.x,
+                        anchor.y,
+                        rearming=anchor.rearming,
+                        fired_direction=anchor.fired_direction,
+                    )
+                continue
+
+            if self.mode != "menu":
+                self.swipe_anchors.pop(hand, None)
+                continue
+
+            missing_since = anchor.missing_since if anchor.missing_since is not None else current_time
+            if current_time - missing_since >= self.menu_swipe_release_seconds:
+                self.swipe_anchors.pop(hand, None)
+                continue
+
+            self.swipe_anchors[hand] = SwipeAnchor(
+                anchor.x,
+                anchor.y,
+                rearming=anchor.rearming,
+                fired_direction=anchor.fired_direction,
+                missing_since=missing_since,
+            )
+
+    def _has_returned_to_anchor(self, anchor: SwipeAnchor, x: float, y: float) -> bool:
+        reset_distance = self.swipe_threshold * 0.5
+
+        if anchor.fired_direction == "UP":
+            return y >= anchor.y - reset_distance
+        if anchor.fired_direction == "DOWN":
+            return y <= anchor.y + reset_distance
+        if anchor.fired_direction == "LEFT":
+            return x >= anchor.x - reset_distance
+        if anchor.fired_direction == "RIGHT":
+            return x <= anchor.x + reset_distance
+
+        return True
 
     def _swipe_direction(self, dx: float, dy: float) -> str | None:
         if abs(dx) >= abs(dy):
@@ -189,12 +358,21 @@ class GestureActionInterpreter:
             return None
         return "UP" if dy < 0 else "DOWN"
 
+    @staticmethod
+    def _opposite_direction(direction: str) -> str:
+        return {
+            "UP": "DOWN",
+            "DOWN": "UP",
+            "LEFT": "RIGHT",
+            "RIGHT": "LEFT",
+        }.get(direction, "")
+
     def _map_swipe_direction(self, direction: str) -> GestureAction:
         if self.mode == "menu":
             if direction == "UP":
-                return GestureAction.MENU_NEXT
-            if direction == "DOWN":
                 return GestureAction.MENU_PREVIOUS
+            if direction == "DOWN":
+                return GestureAction.MENU_NEXT
 
         if self.mode == "cooking":
             if direction == "LEFT":
@@ -218,24 +396,41 @@ class GestureActionInterpreter:
 
         if self.mode == "idle":
             self.mode = "menu"
+            self.pointer_active_action = GestureAction.MENU_NEXT
+            self.pointer_missing_since = None
+            self.pointer_last_action_at = current_time
             return GestureAction.START_APP
 
         self.mode = "idle"
+        self._reset_pointer_state()
         return GestureAction.RESET_APP
 
     def _map_primary_gesture(self, gesture: str) -> GestureAction:
         if gesture == "CLOSED_FIST":
+            if self.mode == "cooking":
+                self.mode = "menu"
+                self._reset_pointer_state()
+                return GestureAction.BACK_TO_MENU
+
             self.mode = "cooking"
+            self._reset_pointer_state()
             return GestureAction.SELECT_RECIPE
         if gesture in {"FIVE_FINGERS", "OPEN_PALM"}:
             if self.mode == "menu":
                 self.mode = "cooking"
+                self._reset_pointer_state()
                 return GestureAction.MENU_CLOSE
             return GestureAction.NO_ACTION
         if gesture == "THREE_FINGERS":
             self.mode = "menu"
+            self._reset_pointer_state()
             return GestureAction.START_APP
         return GestureAction.NO_ACTION
+
+    def _reset_pointer_state(self):
+        self.pointer_active_action = None
+        self.pointer_missing_since = None
+        self.pointer_last_action_at = 0.0
 
     def _count_only(self, active_key: str):
         self.gesture_counts[active_key] = self.gesture_counts.get(active_key, 0) + 1

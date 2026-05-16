@@ -113,6 +113,7 @@ type GestureAction =
   | "MENU_NEXT"
   | "MENU_PREVIOUS"
   | "MENU_CLOSE"
+  | "BACK_TO_MENU"
   | "SELECT_RECIPE"
   | "NEXT_STEP"
   | "PREVIOUS_STEP"

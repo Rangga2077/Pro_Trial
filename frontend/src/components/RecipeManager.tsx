@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { API_BASE_URL } from '../config';
 import { useWebSocket } from '../context/useWebSocket';
-import type { GestureAction, Recipe } from '../types/contracts';
+import type { GestureAction, Recipe, ServerWebSocketMessage } from '../types/contracts';
 import { RecipeStep } from './RecipeStep';
 
 export const RecipeManager: React.FC = () => {
@@ -15,6 +15,7 @@ export const RecipeManager: React.FC = () => {
     const lastAction = lastMessage?.type === 'cv_update' ? lastMessage.data.action : null;
 
     const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+    const handledMessageRef = useRef<ServerWebSocketMessage | null>(null);
 
     useEffect(() => {
         fetch(`${API_BASE_URL}/api/v1/recipes/`)
@@ -60,6 +61,11 @@ export const RecipeManager: React.FC = () => {
 
         if (!isAppStarted) return;
 
+        if (action === 'BACK_TO_MENU') {
+            setIsMenuOpen(true);
+            return;
+        }
+
         if (action === 'MENU_NEXT' && isMenuOpen && recipes.length > 0) {
             setSelectedIndex(index => (index + 1) % recipes.length);
             return;
@@ -99,6 +105,9 @@ export const RecipeManager: React.FC = () => {
 
     useEffect(() => {
         if (!lastMessage || lastMessage.type !== 'cv_update' || !lastMessage.data.action) return;
+        if (handledMessageRef.current === lastMessage) return;
+
+        handledMessageRef.current = lastMessage;
 
         // WebSocket messages are external events; this dispatch intentionally updates UI state.
         // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -159,7 +168,7 @@ export const RecipeManager: React.FC = () => {
                         <div className="p-10 border-b border-white/5 bg-white/5">
                             <h2 className="text-4xl font-black text-white mb-2 italic">MENU</h2>
                             <div className="flex items-center gap-4 text-gray-400 text-sm">
-                                <span className="flex items-center gap-1">Swipe up/down to move</span>
+                                <span className="flex items-center gap-1">Left index once to move</span>
                                 <span className="w-1 h-1 bg-gray-600 rounded-full"></span>
                                 <span className="flex items-center gap-1">Fist to select</span>
                                 <span className="w-1 h-1 bg-gray-600 rounded-full"></span>
@@ -197,6 +206,45 @@ export const RecipeManager: React.FC = () => {
                                 </div>
                             ))}
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {isAppStarted && (
+                <div className="fixed bottom-10 left-10 z-50 w-[280px] rounded-[24px] border border-white/10 bg-black/55 p-5 shadow-2xl backdrop-blur-2xl">
+                    <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-gray-400">Gestures</p>
+                    <div className="grid gap-3 text-sm font-bold text-white">
+                        {isMenuOpen ? (
+                            <>
+                                <div className="flex items-center justify-between gap-4">
+                                    <span className="text-gray-300">Left index once</span>
+                                    <span className="text-blue-300">Move</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-4">
+                                    <span className="text-gray-300">Closed fist once</span>
+                                    <span className="text-blue-300">Select</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-4">
+                                    <span className="text-gray-300">Open palm</span>
+                                    <span className="text-blue-300">Close</span>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div className="flex items-center justify-between gap-4">
+                                    <span className="text-gray-300">Right index once</span>
+                                    <span className="text-blue-300">Next</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-4">
+                                    <span className="text-gray-300">Left index once</span>
+                                    <span className="text-blue-300">Previous</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-4">
+                                    <span className="text-gray-300">Closed fist once</span>
+                                    <span className="text-blue-300">Menu</span>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
             )}
