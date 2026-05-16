@@ -1,0 +1,51 @@
+{
+    "id": "scallion_pancakes",
+    "title": "Scallion Pancakes",
+    "description": "Savory Chinese flatbread folded with oil and minced scallions.",
+    "prep_time_minutes": 30,
+    "cook_time_minutes": 10,
+    "servings": 4,
+    "difficulty": "Medium",
+    "cuisine": "Northern China",
+    "ingredients": [
+        {
+            "name": "All-purpose Flour",
+            "amount": 300,
+            "unit": "g"
+        },
+        {
+            "name": "Hot Water",
+            "amount": 150,
+            "unit": "ml"
+        },
+        {
+            "name": "Scallions",
+            "amount": 4,
+            "unit": "stalks",
+            "notes": "chopped"
+        },
+        {
+            "name": "Sesame Oil",
+            "amount": 2,
+            "unit": "tbsp"
+        }
+    ],
+    "instructions": [
+        {
+            "step": 1,
+            "description": "Make a hot water dough and let it rest."
+        },
+        {
+            "step": 2,
+            "description": "Roll out dough, brush with oil, and sprinkle scallions."
+        },
+        {
+            "step": 3,
+            "description": "Roll into a log, then into a spiral, and flatten into a pancake."
+        },
+        {
+            "step": 4,
+            "description": "Pan-fry until crispy and golden on both sides."
+        }
+    ]
+}

@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+.pytest_cache/
+.pytest_tmp/
+
+# Weights / ML Models
+*.pt
+*.task
+
+# OS
+.DS_Store
+Thumbs.db
+
+# AGENTS
+AGENTS.md

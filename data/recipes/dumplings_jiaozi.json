@@ -1,0 +1,57 @@
+{
+    "id": "dumplings_jiaozi",
+    "title": "Jiaozi (Dumplings)",
+    "description": "Traditional Chinese dumplings filled with meat and vegetables.",
+    "prep_time_minutes": 60,
+    "cook_time_minutes": 15,
+    "servings": 4,
+    "difficulty": "Hard",
+    "cuisine": "Northern China",
+    "ingredients": [
+        {
+            "name": "Ground Pork",
+            "amount": 500,
+            "unit": "g"
+        },
+        {
+            "name": "Napa Cabbage",
+            "amount": 200,
+            "unit": "g",
+            "notes": "finely chopped"
+        },
+        {
+            "name": "Dumpling Wrappers",
+            "amount": 40,
+            "unit": "pcs"
+        },
+        {
+            "name": "Ginger",
+            "amount": 1,
+            "unit": "tbsp",
+            "notes": "minced"
+        },
+        {
+            "name": "Soy Sauce",
+            "amount": 2,
+            "unit": "tbsp"
+        }
+    ],
+    "instructions": [
+        {
+            "step": 1,
+            "description": "Mix pork, cabbage, ginger, and soy sauce for the filling."
+        },
+        {
+            "step": 2,
+            "description": "Place a spoonful of filling on a wrapper and pleat the edges."
+        },
+        {
+            "step": 3,
+            "description": "Boil dumplings in water until they float."
+        },
+        {
+            "step": 4,
+            "description": "Serve with ginger and vinegar dipping sauce."
+        }
+    ]
+}
