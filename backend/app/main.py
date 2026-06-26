@@ -36,11 +36,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from fastapi.staticfiles import StaticFiles
+import os
+
 app.include_router(endpoints.router, prefix=settings.API_V1_STR)
 app.include_router(recipes.router, prefix=f"{settings.API_V1_STR}/recipes", tags=["recipes"])
 app.include_router(camera.router, prefix=f"{settings.API_V1_STR}/camera", tags=["camera"])
 app.include_router(stream.router, prefix="/ws")
 
+# Mount recipe-assets static files from data/img
+base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+project_root = os.path.dirname(base_dir)
+img_dir = os.path.join(project_root, "data", "img")
+if os.path.exists(img_dir):
+    app.mount("/recipe-assets", StaticFiles(directory=img_dir), name="recipe-assets")
 
 @app.get("/")
 def root():

@@ -20,6 +20,7 @@ export interface Recipe {
     servings?: number | null;
     difficulty?: string | null;
     cuisine?: string | null;
+    image_url?: string | null;
     ingredients: Ingredient[];
     instructions: InstructionStep[];
 }

@@ -7,6 +7,7 @@
     "servings": 4,
     "difficulty": "Medium",
     "cuisine": "Beijing/Szechuan",
+    "image_url": "/recipe-assets/hot_sour.png",
     "ingredients": [
         {
             "name": "Wood Ear Mushrooms",

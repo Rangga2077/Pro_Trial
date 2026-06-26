@@ -1,0 +1,114 @@
+# Implement Figma CoCI HUD Design into Frontend
+
+## Reference Design
+
+![Figma HUD Design](file:///C:/Users/Rangga Saputra/AppData/Local/Programs/Antigravity IDE/figma-exports/hud_full_design.png)
+
+## Background
+
+The current [RecipeManager.tsx](file:///c:/Users/Rangga Saputra/Documents/Pro_Trial/frontend/src/components/RecipeManager.tsx) already implements a HUD layout that is **very close** to the Figma design. The existing code has the same structural decomposition (top status bar → progress → three-column body with timers/recipe/utility panels). The task is to refine visuals, colors, spacing, and micro-details to **pixel-match** the Figma.
+
+## Analysis: Current Code vs Figma Delta
+
+After comparing the existing implementation against the Figma data and exported screenshot, the differences are **cosmetic refinements**, not structural rewrites:
+
+| Area | Current State | Figma Target | Delta |
+|------|--------------|--------------|-------|
+| **Outer container** | `bg-[#030908]`, rounded-[34px], cyan border | `bg-[#0A0F1A]`, rounded-[36px], cyan glow border | Tweak bg color, border-radius, shadow |
+| **Inner container** | `bg-[#101727]/88` | `bg-[#0F1626]` + `border: 0.8px rgba(0,184,219,0.2)` + `box-shadow: 0 0 60px rgba(0,200,255,0.13)` | Refine bg, add cyan glow shadow |
+| **Status badges** | `rounded-[18px]`, `bg-[#101727]/70` | `rounded-[10px]`, `bg rgba(8,14,22,0.5)` | Tighter radius, darker bg |
+| **WebSocket badge** | Green dot `#4DFFB3` ✅ matches | Same | No change needed |
+| **Gesture badge** | Purple border `rgba(180,71,255,0.34)` | Same | Matches already |
+| **Progress bar** | Gradient from-[#19cce5] to-[#b6fbff] | `linear-gradient(90deg, #00D3F3, #A2F4FD)` | Slightly different gradient stops |
+| **Section labels** | `text-[#37c6dc]`, tracking-[0.48em] | `rgba(83,234,253,0.7)`, tracking 30% (~0.3em) | Adjust color + tracking |
+| **Timer panel** | `rounded-[26px]` | `rounded-[24px]` | Minor radius tweak |
+| **Circular timer rings** | SVG circles with strokeWidth 5/3/8 | Figma shows concentric rings with dashed inner ring + thicker outer stroke + glow effects | Refine ring structure, add glow shadows |
+| **Timer (2) purple** | `boxed` prop with purple bg | Purple border `rgba(180,71,255,0.28)` + glow `0 0 30px rgba(180,71,255,0.12)` | Already close, fine-tune |
+| **Recipe panel** | Text hierarchy correct | Same hierarchy: RECIPE → Title → STEP N → description | Matches |
+| **Stove target** | Concentric circles with blur | Figma: multiple concentric rings with dashed inner, glow effects, "STOVE" label | Refine ring styling |
+| **BACK/NEXT buttons** | Left/right layout | BACK: ghost style, `bg-white/5`, `border-white/10`. NEXT: solid `#00D3F3` | Minor color tweaks |
+| **Ingredients grid** | 3×3 grid of rounded squares | Same: 9 squares, `bg rgba(255,255,255,0.04)`, `border rgba(255,255,255,0.1)`, `rounded-[14px]` | Adjust radius from 18px to 14px |
+| **Utensils list** | Dot + label items | Same pattern, dot color `rgba(62,247,255,0.5)` | Minor color adjust |
+| **Stove status** | "ACTIVE" text in green | `#7FFFC8` with text-shadow | Add text-shadow, adjust color |
+| **Hand detection** | Left/Right rows | Left: "Detected" in `#FF5A6A`, Right: "Miss" in `#A9BBC8` | Adjust detection colors |
+| **Notes box** | Bottom box | `bg rgba(255,255,255,0.04)`, rounded-[14px] | Minor tweaks |
+| **Background SVG overlay** | Not present | Figma has decorative scatter dots (small cyan/purple dots) | Add decorative dot overlay |
+
+## Proposed Changes
+
+### Component: RecipeManager (Visual Refinements)
+
+#### [MODIFY] [RecipeManager.tsx](file:///c:/Users/Rangga Saputra/Documents/Pro_Trial/frontend/src/components/RecipeManager.tsx)
+
+Refine all sub-components within `RecipeManager.tsx` to pixel-match the Figma design. **No structural changes** — same component tree, same props, same logic. Only Tailwind classes and minor style values change:
+
+1. **Color token updates** across all components:
+   - Outer bg: `#030908` → `#0A0F1A`
+   - Inner container bg: `#101727/88` → `#0F1626`
+   - Section label color: `#37c6dc` → `rgba(83,234,253,0.7)` (i.e. `#53EAFD/70`)
+   - Section label tracking: `0.48em` → `0.3em`
+   - Status active color: `#72ffbc` → `#7FFFC8`
+   - Hand detected color: `rose-300` → `#FF5A6A`
+   - Hand miss color: `slate-400` → `#A9BBC8`
+
+2. **Border radius refinements**:
+   - Outer container: `rounded-[34px]` → `rounded-[36px]`
+   - Status badges: `rounded-[18px]` → `rounded-[10px]`
+   - Timer/utility panels: `rounded-[26px]` → `rounded-[24px]`
+   - Ingredient squares: `rounded-[18px]` → `rounded-[14px]`
+
+3. **Shadow/glow enhancements** to match Figma's `effect_8QWBPQ`:
+   - Outer container: add `shadow-[0_0_60px_rgba(0,200,255,0.13)]`
+   - Status badges: refine glow to match Figma's `box-shadow: 0 0 28px`
+   - Purple timer: add `shadow-[0_0_30px_rgba(180,71,255,0.12)]`
+
+4. **Progress bar gradient**: Adjust to match `linear-gradient(90deg, #00D3F3, #A2F4FD)`
+
+5. **Stove target rings**: Refine to add:
+   - Outer transparent ring with `border 1.6px rgba(0,211,243,0.4)` + glow
+   - Inner dashed ring with `border-dashed` + `rgba(83,234,253,0.4)`
+   - Background blur effects matching `blur(120px)` and `blur(60px)` layers
+
+6. **Button refinements**:
+   - BACK button: `bg-white/5` + `border rgba(255,255,255,0.1)`
+   - NEXT button: `bg-[#00D3F3]` (instead of `#09ccea`)
+
+7. **Decorative dot overlay**: Add small scatter dots (4 cyan + purple dots) positioned per Figma's absolute-positioned decorative elements
+
+8. **Top bar separator**: Add bottom border on top section matching `strokeWeight: 0.8px`
+
+9. **"ACTIVE" text**: Add `text-shadow: 0 4px 4px rgba(0,0,0,0.25)` per Figma `effect_02A5US`
+
+10. **Font weight adjustments**: Match Figma text styles more precisely (e.g., recipe title `font-weight: 500` instead of `font-light`)
+
+---
+
+### Component: ProjectionLayout (No changes needed)
+
+#### [MODIFY] [ProjectionLayout.tsx](file:///c:/Users/Rangga Saputra/Documents/Pro_Trial/frontend/src/components/ProjectionLayout.tsx)
+
+No changes required. The scanline grid, vignette, and video background are working correctly and complement the HUD design.
+
+---
+
+### No other files need changes
+
+- [useProjectionHud.ts](file:///c:/Users/Rangga Saputra/Documents/Pro_Trial/frontend/src/useProjectionHud.ts) — Pure logic hook, no visual code. **No changes.**
+- [App.tsx](file:///c:/Users/Rangga Saputra/Documents/Pro_Trial/frontend/src/App.tsx) — Composition root. **No changes.**
+- [contracts.ts](file:///c:/Users/Rangga Saputra/Documents/Pro_Trial/frontend/src/types/contracts.ts) — Type definitions. **No changes.**
+- Backend — No API or WebSocket changes. **No changes.**
+
+## Verification Plan
+
+### Automated Tests
+```powershell
+cd frontend
+npm run build
+npm run lint
+```
+
+### Manual Verification
+- Side-by-side comparison of the running app against the Figma export screenshot
+- Verify all three HUD modes (idle, menu, cooking) render correctly
+- Confirm WebSocket connection badge, progress bar, timer rings, stove target, and utility panel all match Figma visuals
+- Confirm gesture actions still work (next/previous step, menu navigation)

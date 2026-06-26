@@ -23,21 +23,21 @@ export const ProjectionLayout: React.FC<ProjectionLayoutProps> = ({ children }) 
                 </div>
             )}
 
-            {/* Technical Grid Background */}
+            {/* Projection-safe scanline texture */}
             <div
-                className="absolute inset-0 opacity-20 pointer-events-none z-10"
+                className="absolute inset-0 opacity-[0.08] pointer-events-none z-10"
                 style={{
                     backgroundImage: `
-                        linear-gradient(to right, #333 1px, transparent 1px),
-                        linear-gradient(to bottom, #333 1px, transparent 1px)
+                        linear-gradient(to right, #2bdff0 1px, transparent 1px),
+                        linear-gradient(to bottom, #2bdff0 1px, transparent 1px)
                     `,
-                    backgroundSize: '40px 40px'
+                    backgroundSize: '52px 52px'
                 }}
             />
             {/* Vignette */}
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,black_100%)] opacity-50 pointer-events-none z-10" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,black_100%)] opacity-70 pointer-events-none z-10" />
 
-            <div className="relative z-20">
+            <div className="relative z-20 w-full h-full">
                 {children}
             </div>
         </div>
