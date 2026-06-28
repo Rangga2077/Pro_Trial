@@ -1,26 +1,18 @@
 import React from 'react';
 import { useProjectionHud } from '../../hooks/useProjectionHud';
 import { GestureStatusRail } from './GestureStatusRail';
+import { IngredientCheck } from './IngredientCheck';
 import { RecipeHud } from './RecipeHud';
 import { RecipeMenu } from './RecipeMenu';
-import { StartScreen } from './StartScreen';
 import { UtilityStatusPanel } from './UtilityStatusPanel';
 
 export const ProjectionHud: React.FC = () => {
     const hud = useProjectionHud();
     const isCooking = hud.mode === 'cooking';
+    const isIngredientCheck = hud.mode === 'ingredient_check';
 
     return (
         <div className="relative h-full w-full overflow-hidden">
-            {hud.mode === 'idle' && (
-                <StartScreen
-                    isConnected={hud.isConnected}
-                    isLoadingRecipes={hud.isLoadingRecipes}
-                    recipeError={hud.recipeError}
-                    onStart={hud.openMenu}
-                />
-            )}
-
             {hud.mode === 'menu' && (
                 <RecipeMenu
                     recipes={hud.recipes}
@@ -31,6 +23,16 @@ export const ProjectionHud: React.FC = () => {
                     onNext={hud.nextRecipe}
                     onPrevious={hud.previousRecipe}
                     onClose={hud.closeMenu}
+                />
+            )}
+
+            {isIngredientCheck && hud.currentRecipe && (
+                <IngredientCheck
+                    recipe={hud.currentRecipe}
+                    isConnected={hud.isConnected}
+                    lastAction={hud.lastAction}
+                    onReady={hud.startCooking}
+                    onBack={hud.openMenu}
                 />
             )}
 
@@ -49,20 +51,22 @@ export const ProjectionHud: React.FC = () => {
                 />
             )}
 
-            {/* Gesture hints + connection overlay — hidden in cooking mode (integrated into RecipeHud) */}
-            {!isCooking && (
-                <>
-                    <GestureStatusRail
-                        mode={hud.mode}
-                        lastAction={hud.lastAction}
-                    />
-                    <UtilityStatusPanel
-                        mode={hud.mode}
-                        isConnected={hud.isConnected}
-                        currentRecipe={hud.currentRecipe}
-                        selectedRecipe={hud.selectedRecipe}
-                    />
-                </>
+            {/* Gesture hint rail — shown only in menu mode */}
+            {hud.mode === 'menu' && (
+                <GestureStatusRail
+                    mode={hud.mode}
+                    lastAction={hud.lastAction}
+                />
+            )}
+
+            {/* Status overlay — shown only during ingredient check and cooking */}
+            {(isCooking || isIngredientCheck) && (
+                <UtilityStatusPanel
+                    mode={hud.mode}
+                    isConnected={hud.isConnected}
+                    currentRecipe={hud.currentRecipe}
+                    selectedRecipe={hud.selectedRecipe}
+                />
             )}
         </div>
     );

@@ -14,12 +14,7 @@ export const UtilityStatusPanel: React.FC<UtilityStatusPanelProps> = ({
     mode,
     isConnected,
     currentRecipe,
-    selectedRecipe,
 }) => {
-    if (mode === 'idle') {
-        return null;
-    }
-
     return (
         <GlassPanel className="fixed bottom-4 right-4 w-64 p-4 space-y-4 max-h-[calc(100vh-2rem)] overflow-y-auto z-20">
             {/* Connection Status */}
@@ -27,9 +22,7 @@ export const UtilityStatusPanel: React.FC<UtilityStatusPanelProps> = ({
                 <div className="flex items-center gap-2">
                     <motion.div
                         className="w-2 h-2 rounded-full"
-                        style={{
-                            backgroundColor: isConnected ? '#4DFFB3' : '#FF5A6A',
-                        }}
+                        style={{ backgroundColor: isConnected ? '#4DFFB3' : '#FF5A6A' }}
                         animate={{ opacity: [1, 0.5, 1] }}
                         transition={{ duration: 1.5, repeat: Infinity }}
                     />
@@ -43,20 +36,14 @@ export const UtilityStatusPanel: React.FC<UtilityStatusPanelProps> = ({
                 <>
                     {/* Recipe Title */}
                     <div className="border-t border-cyan-300/20 pt-3">
-                        <p className="text-xs tracking-widest text-cyan-200/70 uppercase mb-1">
-                            RECIPE
-                        </p>
-                        <p className="text-sm font-bold text-white truncate">
-                            {currentRecipe.title}
-                        </p>
+                        <p className="text-xs tracking-widest text-cyan-200/70 uppercase mb-1">RECIPE</p>
+                        <p className="text-sm font-bold text-white truncate">{currentRecipe.title}</p>
                     </div>
 
-                    {/* Ingredients */}
+                    {/* Key Ingredients */}
                     {currentRecipe.ingredients.length > 0 && (
                         <div className="border-t border-cyan-300/20 pt-3">
-                            <p className="text-xs tracking-widest text-cyan-200/70 uppercase mb-2">
-                                KEY INGREDIENTS
-                            </p>
+                            <p className="text-xs tracking-widest text-cyan-200/70 uppercase mb-2">KEY INGREDIENTS</p>
                             <div className="space-y-1">
                                 {currentRecipe.ingredients.slice(0, 3).map((ing) => (
                                     <div key={ing.name} className="text-xs text-slate-300 flex items-center gap-2">
@@ -68,11 +55,9 @@ export const UtilityStatusPanel: React.FC<UtilityStatusPanelProps> = ({
                         </div>
                     )}
 
-                    {/* Prep/Cook Times */}
+                    {/* Timing */}
                     <div className="border-t border-cyan-300/20 pt-3">
-                        <p className="text-xs tracking-widest text-cyan-200/70 uppercase mb-2">
-                            TIMING
-                        </p>
+                        <p className="text-xs tracking-widest text-cyan-200/70 uppercase mb-2">TIMING</p>
                         <div className="space-y-1 text-xs text-slate-300">
                             {currentRecipe.prep_time_minutes && (
                                 <div>Prep: <span className="text-cyan-300">{currentRecipe.prep_time_minutes} min</span></div>
@@ -81,39 +66,6 @@ export const UtilityStatusPanel: React.FC<UtilityStatusPanelProps> = ({
                                 <div>Cook: <span className="text-cyan-300">{currentRecipe.cook_time_minutes} min</span></div>
                             )}
                         </div>
-                    </div>
-                </>
-            )}
-
-            {mode === 'menu' && selectedRecipe && (
-                <>
-                    {/* Menu Selection Info */}
-                    <div className="border-t border-cyan-300/20 pt-3">
-                        <p className="text-xs tracking-widest text-cyan-200/70 uppercase mb-1">
-                            SELECTED
-                        </p>
-                        <p className="text-sm font-bold text-white truncate">
-                            {selectedRecipe.title}
-                        </p>
-                        {selectedRecipe.description && (
-                            <p className="text-xs text-slate-400 mt-2 line-clamp-2">
-                                {selectedRecipe.description}
-                            </p>
-                        )}
-                    </div>
-
-                    {/* Difficulty and Cuisine */}
-                    <div className="flex gap-2">
-                        {selectedRecipe.difficulty && (
-                            <div className="px-2 py-1 bg-slate-800/50 rounded text-xs text-slate-300 border border-slate-700">
-                                {selectedRecipe.difficulty}
-                            </div>
-                        )}
-                        {selectedRecipe.cuisine && (
-                            <div className="px-2 py-1 bg-cyan-900/30 rounded text-xs text-cyan-300 border border-cyan-500/30">
-                                {selectedRecipe.cuisine}
-                            </div>
-                        )}
                     </div>
                 </>
             )}

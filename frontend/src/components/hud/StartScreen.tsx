@@ -47,11 +47,11 @@ export const StartScreen: React.FC<StartScreenProps> = ({
 
                 {/* Title */}
                 <div className="space-y-2">
-                    <h1 className="text-4xl font-bold tracking-widest text-white uppercase">
-                        CHEF_HUD
+                    <h1 className="text-4xl font-satoshi-light tracking-widest text-white uppercase">
+                        JUST YOU AND YOUR RECIPES
                     </h1>
-                    <p className="text-sm tracking-widest text-cyan-300/60 font-mono">
-                        INTERACTIVE COOKING SYSTEM v2.4
+                    <p className="text-sm tracking-widest text-white/60 font-satoshi">
+                        INTERACTIVE COOKING SYSTEM 1.0
                     </p>
                 </div>
 

@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { motion } from 'framer-motion';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useWebSocket } from '../../context/useWebSocket';
 import { API_BASE_URL } from '../../config';
 import type { Recipe } from '../../types/contracts';
@@ -15,8 +16,28 @@ export interface RecipeMenuProps {
     onClose: () => void;
 }
 
-const ACCENT_COLORS = ['#26d9ee', '#72ffbc', '#b348ff', '#ff9f40', '#ffd166'];
-const getColor = (i: number) => ACCENT_COLORS[i % ACCENT_COLORS.length];
+/* ── Constants ──────────────────────────────────────────────────────── */
+
+const CARD_W = 520;
+const CARD_H = 325;
+
+/** Per-distance-from-center visual transform values */
+const CARD_TRANSFORMS = [
+    { x: 0,    scale: 1.00, opacity: 1.00, dimOpacity: 0,    zIndex: 20 }, // center
+    { x: 340,  scale: 0.76, opacity: 0.85, dimOpacity: 0.42, zIndex: 15 }, // ±1
+    { x: 575,  scale: 0.56, opacity: 0.55, dimOpacity: 0.62, zIndex: 10 }, // ±2
+    { x: 730,  scale: 0.42, opacity: 0.00, dimOpacity: 0.80, zIndex: 5  }, // ±3 (hidden)
+];
+
+const CARD_GRADIENTS = [
+    'linear-gradient(150deg, #0f1117 0%, #1c2848 55%, #0d1835 100%)',
+    'linear-gradient(150deg, #1a0a0a 0%, #3d1515 55%, #200a0a 100%)',
+    'linear-gradient(150deg, #0a1512 0%, #0f2d20 55%, #071a10 100%)',
+    'linear-gradient(150deg, #120a1a 0%, #2a1045 55%, #160825 100%)',
+    'linear-gradient(150deg, #14100a 0%, #2e2206 55%, #1a1400 100%)',
+];
+
+/* ── Helpers ────────────────────────────────────────────────────────── */
 
 function getImageUrl(url?: string | null): string {
     if (!url) return '';
@@ -24,229 +45,191 @@ function getImageUrl(url?: string | null): string {
     return `${API_BASE_URL}${url}`;
 }
 
-function ParticleField() {
-    const [particles] = useState(() =>
-        Array.from({ length: 20 }, (_, i) => ({
-            id: i,
-            x: Math.random() * 100,
-            y: Math.random() * 100,
-            size: Math.random() * 1.5 + 0.5,
-            duration: Math.random() * 9 + 5,
-            delay: Math.random() * 6,
-            color: ['#26d9ee', '#72ffbc', '#b348ff'][i % 3],
-        }))
-    );
-    return (
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            {particles.map((p) => (
-                <motion.div
-                    key={p.id}
-                    className="absolute rounded-full"
-                    style={{ left: `${p.x}%`, top: `${p.y}%`, width: p.size, height: p.size, background: p.color }}
-                    animate={{ opacity: [0, 0.6, 0], y: [0, -60, -110], scale: [0.5, 1, 0.2] }}
-                    transition={{ duration: p.duration, delay: p.delay, repeat: Infinity, ease: 'easeOut' }}
-                />
-            ))}
-        </div>
-    );
+function wrap(i: number, total: number): number {
+    return ((i % total) + total) % total;
 }
 
-function StatusBar() {
-    const { isConnected } = useWebSocket();
-    const [time, setTime] = useState(new Date());
-    useEffect(() => {
-        const t = setInterval(() => setTime(new Date()), 1000);
-        return () => clearInterval(t);
-    }, []);
-    const statusColor = isConnected ? '#72ffbc' : '#ff6d6d';
-    return (
-        <div
-            className="relative z-20 flex items-center justify-between px-8 py-4 flex-shrink-0"
-            style={{ borderBottom: '0.8px solid rgba(255,255,255,0.07)' }}
-        >
-            <div className="flex items-center gap-3">
-                <motion.div
-                    className="size-2 rounded-full flex-shrink-0"
-                    style={{ background: statusColor, boxShadow: `0 0 6px ${statusColor}` }}
-                    animate={{ opacity: [1, 0.3, 1] }}
-                    transition={{ duration: 1.5, repeat: Infinity }}
-                />
-                <span className="text-xs tracking-widest uppercase font-mono" style={{ color: statusColor }}>
-                    WebSocket {isConnected ? 'Connected' : 'Disconnected'}
-                </span>
-            </div>
-            <div className="flex items-center gap-5">
-                <span className="text-xs tracking-widest font-mono text-white/30">
-                    {time.toLocaleTimeString('en-US', { hour12: false })}
-                </span>
-                <div
-                    className="px-4 py-1 rounded-full text-xs tracking-widest uppercase font-mono"
-                    style={{ background: 'rgba(179,72,255,0.12)', border: '0.8px solid rgba(179,72,255,0.4)', color: '#b348ff' }}
-                >
-                    CHEF MODE
-                </div>
-            </div>
-        </div>
-    );
+/** Shortest signed distance from index → active, accounting for wrap */
+function wrappedOffset(index: number, active: number, total: number): number {
+    if (total <= 1) return 0;
+    const raw = index - active;
+    if (raw > total / 2) return raw - total;
+    if (raw < -total / 2) return raw + total;
+    return raw;
 }
 
-function DishImageHero({ recipe, color }: { recipe: Recipe; color: string }) {
+function getTransform(offset: number) {
+    const abs = Math.min(Math.abs(offset), 3);
+    const dir = offset >= 0 ? 1 : -1;
+    const t = CARD_TRANSFORMS[abs];
+    return { ...t, x: dir * t.x };
+}
+
+/* ── Single carousel card ───────────────────────────────────────────── */
+
+interface CarouselCardProps {
+    recipe: Recipe;
+    colorIndex: number;
+    offset: number;
+    onFocus: () => void;
+    onInitialize: () => void;
+}
+
+const CarouselCard: React.FC<CarouselCardProps> = ({
+    recipe, colorIndex, offset, onFocus, onInitialize,
+}) => {
     const imageUrl = getImageUrl(recipe.image_url);
-    return (
-        <AnimatePresence mode="wait">
-            <motion.div
-                key={recipe.id}
-                className="absolute inset-0"
-                initial={{ opacity: 0, scale: 1.04 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 1.02 }}
-                transition={{ duration: 0.6, ease: 'easeOut' }}
-            >
-                {imageUrl ? (
-                    <img
-                        src={imageUrl}
-                        alt={recipe.title}
-                        className="absolute inset-0 w-full h-full object-cover"
-                        style={{ objectPosition: 'center 30%' }}
-                    />
-                ) : (
-                    <div className="absolute inset-0 bg-[#0a0f1a]" />
-                )}
-                {/* Top vignette */}
-                <div
-                    className="absolute inset-0"
-                    style={{ background: 'linear-gradient(180deg, rgba(3,9,8,0.72) 0%, rgba(3,9,8,0.2) 35%, transparent 55%)' }}
-                />
-                {/* Bottom dark fade */}
-                <div
-                    className="absolute bottom-0 left-0 right-0"
-                    style={{
-                        height: '62%',
-                        background: 'linear-gradient(to top, #030908 0%, #030908 30%, rgba(3,9,8,0.92) 50%, rgba(3,9,8,0.6) 68%, transparent 100%)',
-                    }}
-                />
-                {/* Bottom blur layer */}
-                <div
-                    className="absolute bottom-0 left-0 right-0"
-                    style={{
-                        height: '38%',
-                        backdropFilter: 'blur(18px)',
-                        WebkitBackdropFilter: 'blur(18px)',
-                        maskImage: 'linear-gradient(to top, black 0%, black 40%, transparent 100%)',
-                        WebkitMaskImage: 'linear-gradient(to top, black 0%, black 40%, transparent 100%)',
-                    }}
-                />
-                {/* Color tint */}
-                <div
-                    className="absolute inset-0"
-                    style={{ background: `radial-gradient(ellipse 80% 50% at 50% 70%, ${color}08 0%, transparent 70%)` }}
-                />
-            </motion.div>
-        </AnimatePresence>
-    );
-}
+    const t = getTransform(offset);
+    const isCenter = offset === 0;
 
-function DishInfo({ recipe, color, onStart }: { recipe: Recipe; color: string; onStart: () => void }) {
-    const cuisine = (recipe.cuisine || 'GLOBAL').toUpperCase();
-    const cookTime = recipe.cook_time_minutes ? `${recipe.cook_time_minutes} MIN` : '15 MIN';
-    const difficulty = (recipe.difficulty || 'EASY').toUpperCase();
+    const cuisine  = (recipe.cuisine   || 'GLOBAL').toUpperCase();
+    const diff     = (recipe.difficulty || 'EASY').toUpperCase();
+    const cookTime = recipe.cook_time_minutes ? `${recipe.cook_time_minutes} MIN` : '—';
 
     return (
-        <AnimatePresence mode="wait">
+        <motion.div
+            style={{
+                position: 'absolute',
+                width: CARD_W,
+                height: CARD_H,
+                left: '50%',
+                top: '50%',
+                marginLeft: -CARD_W / 2,
+                marginTop: -CARD_H / 2,
+                borderRadius: 20,
+                overflow: 'hidden',
+                cursor: isCenter ? 'default' : 'pointer',
+            }}
+            animate={{
+                x: t.x,
+                scale: t.scale,
+                opacity: t.opacity,
+                zIndex: t.zIndex,
+            }}
+            transition={{ duration: 0.48, ease: [0.25, 0.46, 0.45, 0.94] }}
+            onClick={() => { if (!isCenter) onFocus(); }}
+            whileHover={!isCenter ? { scale: t.scale * 1.04 } : undefined}
+        >
+            {/* Background: image or colour gradient */}
+            {imageUrl ? (
+                <img
+                    src={imageUrl}
+                    alt={recipe.title}
+                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 30%' }}
+                />
+            ) : (
+                <div style={{ position: 'absolute', inset: 0, background: CARD_GRADIENTS[colorIndex % CARD_GRADIENTS.length] }} />
+            )}
+
+            {/* Dark gradient overlay — heavier at bottom for text */}
+            <div style={{
+                position: 'absolute', inset: 0,
+                background: isCenter
+                    ? 'linear-gradient(to top, rgba(0,0,0,0.90) 0%, rgba(0,0,0,0.55) 38%, rgba(0,0,0,0.18) 65%, transparent 100%)'
+                    : 'linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.30) 55%, transparent 100%)',
+            }} />
+
+            {/* Dimming overlay — animated per distance */}
             <motion.div
-                key={recipe.id}
-                className="relative z-10 flex flex-col items-center text-center px-6"
-                initial={{ opacity: 0, y: 22 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.45, ease: 'easeOut' }}
-            >
-                {/* Badges */}
-                <div className="flex items-center gap-3 mb-5">
-                    <span
-                        className="px-3 py-1 rounded-full text-xs tracking-widest uppercase font-mono"
-                        style={{ background: `${color}18`, border: `0.8px solid ${color}50`, color }}
-                    >
-                        {cuisine}
-                    </span>
-                    <span
-                        className="px-3 py-1 rounded-full text-xs tracking-widest uppercase font-mono"
-                        style={{ background: 'rgba(255,255,255,0.05)', border: '0.8px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.45)' }}
-                    >
-                        {cookTime}
-                    </span>
-                    <span
-                        className="px-3 py-1 rounded-full text-xs tracking-widest uppercase font-mono"
-                        style={{ background: 'rgba(255,255,255,0.05)', border: '0.8px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.45)' }}
-                    >
-                        {difficulty}
-                    </span>
-                </div>
+                style={{ position: 'absolute', inset: 0, background: '#000', borderRadius: 20 }}
+                animate={{ opacity: t.dimOpacity }}
+                transition={{ duration: 0.48, ease: 'easeOut' }}
+            />
 
-                {/* Title */}
-                <h2
-                    className="mb-4 tracking-widest uppercase"
-                    style={{ fontFamily: "'Sometype Mono', monospace", fontSize: 'clamp(1.6rem, 3.5vw, 2.6rem)', color: '#ffffff', lineHeight: 1.1 }}
-                >
-                    {recipe.title}
-                </h2>
-
-                {/* Description */}
-                {recipe.description && (
-                    <p
-                        className="mb-6 max-w-xl text-sm font-mono"
-                        style={{ color: 'rgba(255,255,255,0.52)', lineHeight: 1.85, letterSpacing: '0.04em' }}
-                    >
-                        {recipe.description}
-                    </p>
-                )}
-
-                {/* Ingredients */}
-                {recipe.ingredients.length > 0 && (
-                    <div className="flex flex-wrap justify-center gap-2 mb-8 max-w-2xl">
-                        {recipe.ingredients.map((ing, i) => (
-                            <motion.span
-                                key={ing.name}
-                                initial={{ opacity: 0, scale: 0.85 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                transition={{ delay: i * 0.05 }}
-                                className="px-3 py-1 rounded-full text-xs tracking-wide font-mono"
-                                style={{ background: 'rgba(0,0,0,0.5)', border: `0.8px solid ${color}30`, color, opacity: 0.8 }}
-                            >
-                                {ing.name}
-                            </motion.span>
+            {/* Content (center card only) */}
+            {isCenter && (
+                <div style={{
+                    position: 'absolute', left: 0, right: 0, bottom: 0,
+                    padding: '22px 26px',
+                    display: 'flex', flexDirection: 'column', gap: 9,
+                }}>
+                    {/* Badges */}
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {[cuisine, diff, cookTime].map((badge) => (
+                            <span key={badge} style={{
+                                padding: '3px 10px', borderRadius: 999,
+                                border: '0.8px solid rgba(255,255,255,0.22)',
+                                background: 'rgba(0,0,0,0.45)',
+                                backdropFilter: 'blur(10px)',
+                                color: 'rgba(255,255,255,0.62)',
+                                fontSize: 9, fontFamily: 'Inter, sans-serif',
+                                fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.2,
+                            }}>{badge}</span>
                         ))}
                     </div>
-                )}
 
-                {/* CTA */}
-                <motion.button
-                    onClick={onStart}
-                    className="relative px-10 py-4 rounded-full overflow-hidden cursor-pointer"
-                    style={{
-                        fontFamily: "'Sometype Mono', monospace",
-                        fontSize: 12,
-                        letterSpacing: '0.22em',
-                        background: `linear-gradient(135deg, ${color}22 0%, ${color}0c 100%)`,
-                        border: `0.8px solid ${color}`,
-                        color,
-                        boxShadow: `0 0 28px ${color}28, inset 0 0 20px ${color}08`,
-                    }}
-                    whileHover={{ scale: 1.04, boxShadow: `0 0 40px ${color}40` }}
-                    whileTap={{ scale: 0.97 }}
-                >
-                    <motion.div
-                        className="absolute inset-0 pointer-events-none"
-                        animate={{ opacity: [0.2, 0.5, 0.2] }}
-                        transition={{ duration: 2, repeat: Infinity }}
-                        style={{ background: `radial-gradient(ellipse at center, ${color}14 0%, transparent 70%)` }}
-                    />
-                    <span className="relative uppercase tracking-widest font-mono">INITIALIZE DETECTION →</span>
-                </motion.button>
-            </motion.div>
-        </AnimatePresence>
+                    {/* Title */}
+                    <h2 style={{
+                        margin: 0, color: '#ffffff',
+                        fontSize: 24,
+                        fontFamily: "'Sometype Mono', 'Space Mono', monospace",
+                        fontWeight: 700, textTransform: 'uppercase',
+                        lineHeight: 1.15, letterSpacing: '0.04em',
+                    }}>
+                        {recipe.title}
+                    </h2>
+
+                    {/* Description */}
+                    {recipe.description && (
+                        <p style={{
+                            margin: 0, color: 'rgba(255,255,255,0.52)',
+                            fontSize: 11, fontFamily: 'Inter, sans-serif',
+                            fontWeight: 400, lineHeight: 1.65,
+                            overflow: 'hidden',
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                        }}>
+                            {recipe.description}
+                        </p>
+                    )}
+
+                    {/* CTA row */}
+                    <div style={{ display: 'flex', gap: 10, marginTop: 2, alignItems: 'center' }}>
+                        <motion.button
+                            onClick={onInitialize}
+                            style={{
+                                padding: '9px 20px',
+                                background: 'white', border: 'none', borderRadius: 8,
+                                color: '#0C0C0F', fontSize: 11,
+                                fontFamily: 'Inter, sans-serif', fontWeight: 700,
+                                textTransform: 'uppercase', letterSpacing: 1.3,
+                                cursor: 'pointer',
+                            }}
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.96 }}
+                        >
+                            START COOKING
+                        </motion.button>
+
+                        {recipe.ingredients.length > 0 && (
+                            <span style={{
+                                padding: '9px 16px',
+                                border: '0.8px solid rgba(255,255,255,0.22)', borderRadius: 8,
+                                color: 'rgba(255,255,255,0.55)',
+                                fontSize: 11, fontFamily: 'Inter, sans-serif', fontWeight: 400, letterSpacing: 0.5,
+                            }}>
+                                {recipe.ingredients.length} INGREDIENTS
+                            </span>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Active card border glow */}
+            {isCenter && (
+                <div style={{
+                    position: 'absolute', inset: 0, borderRadius: 20,
+                    border: '1px solid rgba(255,255,255,0.14)',
+                    boxShadow: '0 0 0 1px rgba(255,255,255,0.04), 0 20px 60px rgba(0,0,0,0.6)',
+                    pointerEvents: 'none',
+                }} />
+            )}
+        </motion.div>
     );
-}
+};
+
+/* ── Main component ─────────────────────────────────────────────────── */
 
 export const RecipeMenu: React.FC<RecipeMenuProps> = ({
     recipes,
@@ -254,41 +237,56 @@ export const RecipeMenu: React.FC<RecipeMenuProps> = ({
     isLoading,
     error,
     onSelect,
+    onNext,
+    onPrevious,
 }) => {
-    const [localHighlightIndex, setLocalHighlightIndex] = useState<number | null>(null);
-    const [activeCategory, setActiveCategory] = useState('ALL');
-    const prevSelectedIndex = useRef(selectedIndex);
+    const { isConnected } = useWebSocket();
+    const [activeIndex, setActiveIndex] = useState(selectedIndex);
+    const prevGestureIndex = useRef(selectedIndex);
 
-    // Sync gesture-driven selectedIndex changes (MENU_NEXT / MENU_PREVIOUS) to local highlight
+    /* Sync gesture-driven parent changes */
     useEffect(() => {
-        if (prevSelectedIndex.current !== selectedIndex) {
-            prevSelectedIndex.current = selectedIndex;
-            setLocalHighlightIndex(selectedIndex);
+        if (prevGestureIndex.current !== selectedIndex) {
+            prevGestureIndex.current = selectedIndex;
+            setActiveIndex(selectedIndex);
         }
     }, [selectedIndex]);
 
-    const highlightedRecipe = localHighlightIndex !== null ? (recipes[localHighlightIndex] ?? null) : null;
-    const highlightedColor = localHighlightIndex !== null ? getColor(localHighlightIndex) : '#26d9ee';
+    const total = recipes.length;
 
-    const categories = ['ALL', ...Array.from(new Set(recipes.map((r) => (r.cuisine || 'GLOBAL').toUpperCase())))];
-    const filtered = activeCategory === 'ALL'
-        ? recipes
-        : recipes.filter((r) => (r.cuisine || 'GLOBAL').toUpperCase() === activeCategory);
+    const goPrev = useCallback(() => {
+        if (total === 0) return;
+        const next = wrap(activeIndex - 1, total);
+        setActiveIndex(next);
+        onPrevious();
+    }, [activeIndex, total, onPrevious]);
 
-    const handleStart = useCallback(() => {
-        if (localHighlightIndex !== null) {
-            onSelect(localHighlightIndex);
-        }
-    }, [localHighlightIndex, onSelect]);
+    const goNext = useCallback(() => {
+        if (total === 0) return;
+        const next = wrap(activeIndex + 1, total);
+        setActiveIndex(next);
+        onNext();
+    }, [activeIndex, total, onNext]);
 
+    const handleInitialize = useCallback(() => {
+        onSelect(activeIndex);
+    }, [activeIndex, onSelect]);
+
+    /* ── Loading ── */
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center h-full w-full" style={{ background: '#030908' }}>
+            <div style={{
+                width: '100%', height: '100%', background: '#0C0C0F',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
                 <motion.p
-                    className="text-xs font-mono tracking-widest"
-                    style={{ color: '#26d9ee' }}
-                    animate={{ opacity: [0.5, 1] }}
-                    transition={{ duration: 1.5, repeat: Infinity }}
+                    style={{
+                        color: 'rgba(255,255,255,0.35)', fontSize: 11,
+                        fontFamily: 'Inter, sans-serif', fontWeight: 700,
+                        textTransform: 'uppercase', letterSpacing: 3,
+                    }}
+                    animate={{ opacity: [0.35, 0.85, 0.35] }}
+                    transition={{ duration: 1.6, repeat: Infinity }}
                 >
                     LOADING RECIPES...
                 </motion.p>
@@ -296,183 +294,168 @@ export const RecipeMenu: React.FC<RecipeMenuProps> = ({
         );
     }
 
-    return (
-        <div className="relative flex flex-col overflow-hidden w-full h-full" style={{ background: '#030908' }}>
-            <ParticleField />
+    /* ── Error / empty ── */
+    if (error || total === 0) {
+        return (
+            <div style={{
+                width: '100%', height: '100%', background: '#0C0C0F',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12,
+            }}>
+                <p style={{ color: 'rgba(255,80,80,0.75)', fontSize: 12, fontFamily: 'Inter, sans-serif' }}>
+                    {error ?? 'No recipes found'}
+                </p>
+            </div>
+        );
+    }
 
-            {/* Background image or ambient glow */}
-            <div className="absolute inset-0">
-                {highlightedRecipe ? (
-                    <DishImageHero recipe={highlightedRecipe} color={highlightedColor} />
-                ) : (
+    return (
+        <div style={{
+            width: '100%', height: '100%',
+            background: '#0C0C0F',
+            position: 'relative',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+        }}>
+            {/* Subtle centre ambient glow */}
+            <div style={{
+                position: 'absolute', inset: 0, pointerEvents: 'none',
+                background: 'radial-gradient(ellipse 55% 45% at 50% 55%, rgba(255,255,255,0.035) 0%, transparent 70%)',
+            }} />
+
+            {/* ── Status bar (top) ─────────────────────────── */}
+            <div style={{
+                position: 'absolute', top: 20, left: 0, right: 0,
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '0 28px', zIndex: 30, pointerEvents: 'none',
+            }}>
+                {/* WebSocket status chip */}
+                <div style={{
+                    pointerEvents: 'auto',
+                    display: 'inline-flex', alignItems: 'center', gap: 8,
+                    padding: '7px 14px',
+                    background: 'rgba(255,255,255,0.05)',
+                    border: '0.8px solid rgba(255,255,255,0.10)',
+                    borderRadius: 10, backdropFilter: 'blur(12px)',
+                }}>
                     <motion.div
-                        className="absolute inset-0"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        style={{ background: 'radial-gradient(ellipse 70% 40% at 50% 20%, rgba(38,217,238,0.05) 0%, transparent 70%)' }}
+                        style={{
+                            width: 7, height: 7, borderRadius: '50%',
+                            background: isConnected ? '#4DFFB3' : '#FF5A6A',
+                            boxShadow: `0 0 6px ${isConnected ? '#4DFFB3' : '#FF5A6A'}`,
+                        }}
+                        animate={{ opacity: [1, 0.45, 1] }}
+                        transition={{ duration: 1.5, repeat: Infinity }}
                     />
-                )}
+                    <span style={{
+                        color: 'rgba(255,255,255,0.50)', fontSize: 10,
+                        fontFamily: 'Inter, sans-serif', fontWeight: 700,
+                        textTransform: 'uppercase', letterSpacing: 1.2,
+                    }}>
+                        {isConnected ? 'CONNECTED' : 'DISCONNECTED'}
+                    </span>
+                </div>
+
+                {/* Index counter */}
+                <div style={{
+                    pointerEvents: 'auto',
+                    padding: '7px 14px',
+                    background: 'rgba(255,255,255,0.04)',
+                    border: '0.8px solid rgba(255,255,255,0.08)',
+                    borderRadius: 10,
+                }}>
+                    <span style={{
+                        color: 'rgba(255,255,255,0.30)', fontSize: 10,
+                        fontFamily: "'Cousine', 'Courier New', monospace", fontWeight: 700,
+                        letterSpacing: 1.5,
+                    }}>
+                        {activeIndex + 1} / {total}
+                    </span>
+                </div>
             </div>
 
-            <StatusBar />
+            {/* ── Carousel area ────────────────────────────── */}
+            <div style={{
+                flex: 1, position: 'relative',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+                {/* Left chevron */}
+                <motion.button
+                    onClick={goPrev}
+                    style={{
+                        position: 'absolute', left: 18, zIndex: 30,
+                        width: 44, height: 44, borderRadius: '50%',
+                        background: 'rgba(255,255,255,0.07)',
+                        border: '0.8px solid rgba(255,255,255,0.12)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        cursor: 'pointer', backdropFilter: 'blur(12px)',
+                    }}
+                    whileHover={{ background: 'rgba(255,255,255,0.14)', scale: 1.08 }}
+                    whileTap={{ scale: 0.92 }}
+                >
+                    <ChevronLeft size={18} color="rgba(255,255,255,0.65)" />
+                </motion.button>
 
-            <div className="relative z-10 flex flex-col flex-1 min-h-0">
-                {/* Hero / scanner area */}
-                <div className="flex flex-col items-center pt-8 pb-6 px-6">
-                    <AnimatePresence mode="wait">
-                        {!highlightedRecipe ? (
-                            <motion.div
-                                key="scanner"
-                                className="flex flex-col items-center gap-5"
-                                initial={{ opacity: 0, y: -12 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -8, scale: 0.95 }}
-                                transition={{ duration: 0.4 }}
-                            >
-                                {/* Scanner ring */}
-                                <div className="relative flex items-center justify-center" style={{ width: 140, height: 140 }}>
-                                    <motion.div
-                                        className="absolute rounded-full border-2"
-                                        style={{ width: 140, height: 140, borderColor: '#26d9ee', opacity: 0.12 }}
-                                        animate={{ scale: [1, 1.1, 1], opacity: [0.12, 0.03, 0.12] }}
-                                        transition={{ duration: 3, repeat: Infinity }}
-                                    />
-                                    <motion.div
-                                        className="absolute rounded-full border"
-                                        style={{ width: 116, height: 116, borderColor: '#26d9ee', opacity: 0.35, borderStyle: 'dashed' }}
-                                        animate={{ rotate: 360 }}
-                                        transition={{ duration: 12, repeat: Infinity, ease: 'linear' }}
-                                    />
-                                    <motion.div
-                                        className="absolute rounded-full border-2"
-                                        style={{ width: 91, height: 91, borderColor: '#26d9ee', opacity: 0.55 }}
-                                        animate={{ rotate: -360 }}
-                                        transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
-                                    >
-                                        <div
-                                            className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 size-2 rounded-full"
-                                            style={{ background: '#26d9ee', boxShadow: '0 0 8px #26d9ee' }}
-                                        />
-                                    </motion.div>
-                                    <div
-                                        className="relative size-12 rounded-full flex items-center justify-center"
-                                        style={{
-                                            background: 'linear-gradient(135deg, rgba(38,217,238,0.2) 0%, rgba(38,217,238,0.06) 100%)',
-                                            border: '1px solid rgba(38,217,238,0.3)',
-                                        }}
-                                    >
-                                        <svg width="24" height="24" viewBox="0 0 80 80" fill="none">
-                                            <path d="M27 40C27 32.82 32.82 27 40 27" stroke="#26d9ee" strokeWidth="6" strokeLinecap="round" />
-                                            <path d="M53 40C53 47.18 47.18 53 40 53" stroke="#26d9ee" strokeWidth="6" strokeLinecap="round" />
-                                            <path d="M40 20V14M40 66V60M20 40H14M66 40H60" stroke="#26d9ee" strokeWidth="6" strokeLinecap="round" />
-                                        </svg>
-                                    </div>
-                                </div>
-
-                                <div className="text-center">
-                                    <div className="text-xs tracking-widest mb-2 font-mono" style={{ color: '#26d9ee', opacity: 0.5 }}>
-                                        INTERACTIVE COOKING SYSTEM v2.4
-                                    </div>
-                                    <h1
-                                        style={{ fontFamily: "'Sometype Mono', monospace", fontSize: 'clamp(2rem, 4.5vw, 3rem)', color: '#ffffff', letterSpacing: '0.25em', lineHeight: 1 }}
-                                    >
-                                        CHEF_HUD
-                                    </h1>
-                                    <p className="mt-3 text-xs tracking-widest font-mono text-white/30 max-w-[380px] leading-relaxed mx-auto">
-                                        SELECT A RECIPE TO INITIALIZE INGREDIENT DETECTION
-                                    </p>
-                                </div>
-                            </motion.div>
-                        ) : (
-                            <motion.div key="spacer" className="h-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} />
-                        )}
-                    </AnimatePresence>
+                {/* Cards container */}
+                <div style={{ position: 'relative', width: CARD_W, height: CARD_H }}>
+                    {recipes.map((recipe, i) => {
+                        const offset = wrappedOffset(i, activeIndex, total);
+                        if (Math.abs(offset) >= 3) return null; // off-screen, skip render
+                        return (
+                            <CarouselCard
+                                key={recipe.id}
+                                recipe={recipe}
+                                colorIndex={i}
+                                offset={offset}
+                                onFocus={() => setActiveIndex(i)}
+                                onInitialize={handleInitialize}
+                            />
+                        );
+                    })}
                 </div>
 
-                {/* Dish info — sits above bottom nav */}
-                <div className="flex-1 flex flex-col justify-end min-h-0">
-                    {highlightedRecipe && (
-                        <div className="flex flex-col items-center pb-6 overflow-y-auto">
-                            <DishInfo recipe={highlightedRecipe} color={highlightedColor} onStart={handleStart} />
-                        </div>
-                    )}
-                </div>
+                {/* Right chevron */}
+                <motion.button
+                    onClick={goNext}
+                    style={{
+                        position: 'absolute', right: 18, zIndex: 30,
+                        width: 44, height: 44, borderRadius: '50%',
+                        background: 'rgba(255,255,255,0.07)',
+                        border: '0.8px solid rgba(255,255,255,0.12)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        cursor: 'pointer', backdropFilter: 'blur(12px)',
+                    }}
+                    whileHover={{ background: 'rgba(255,255,255,0.14)', scale: 1.08 }}
+                    whileTap={{ scale: 0.92 }}
+                >
+                    <ChevronRight size={18} color="rgba(255,255,255,0.65)" />
+                </motion.button>
+            </div>
 
-                {/* Bottom navigation */}
-                <div className="relative z-20 px-6 pb-8 pt-4 flex-shrink-0">
-                    {error && (
-                        <p className="text-center text-xs font-mono text-rose-400 mb-3 tracking-widest">{error}</p>
-                    )}
-
-                    {/* Category tabs */}
-                    <div
-                        className="flex items-center justify-center gap-2 mb-4 overflow-x-auto"
-                        style={{ scrollbarWidth: 'none' }}
-                    >
-                        {categories.map((cat) => (
-                            <motion.button
-                                key={cat}
-                                onClick={() => setActiveCategory(cat)}
-                                className="px-4 py-1.5 rounded-full text-xs tracking-widest whitespace-nowrap font-mono cursor-pointer"
-                                style={{
-                                    background: activeCategory === cat ? 'rgba(38,217,238,0.12)' : 'rgba(0,0,0,0.45)',
-                                    border: `0.8px solid ${activeCategory === cat ? 'rgba(38,217,238,0.5)' : 'rgba(255,255,255,0.09)'}`,
-                                    color: activeCategory === cat ? '#26d9ee' : 'rgba(255,255,255,0.35)',
-                                    backdropFilter: 'blur(8px)',
-                                }}
-                                whileHover={{ scale: 1.06 }}
-                                whileTap={{ scale: 0.94 }}
-                            >
-                                {cat}
-                            </motion.button>
-                        ))}
-                    </div>
-
-                    {/* Recipe pills */}
-                    <div
-                        className="flex items-center gap-2.5 overflow-x-auto pb-1 justify-center flex-wrap"
-                        style={{ scrollbarWidth: 'none' }}
-                    >
-                        <AnimatePresence>
-                            {filtered.map((recipe) => {
-                                const recipeIndex = recipes.findIndex((r) => r.id === recipe.id);
-                                const isActive = localHighlightIndex === recipeIndex;
-                                const pillColor = getColor(recipeIndex);
-                                return (
-                                    <motion.button
-                                        key={recipe.id}
-                                        initial={{ opacity: 0, y: 10 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        exit={{ opacity: 0, y: 6 }}
-                                        onClick={() => setLocalHighlightIndex(isActive ? null : recipeIndex)}
-                                        className="flex items-center gap-2 px-5 py-2.5 rounded-full whitespace-nowrap font-mono cursor-pointer"
-                                        style={{
-                                            fontSize: 10,
-                                            letterSpacing: '0.15em',
-                                            background: isActive ? `${pillColor}20` : 'rgba(0,0,0,0.55)',
-                                            border: `0.8px solid ${isActive ? pillColor : 'rgba(255,255,255,0.1)'}`,
-                                            color: isActive ? pillColor : 'rgba(255,255,255,0.45)',
-                                            boxShadow: isActive ? `0 0 16px ${pillColor}28` : 'none',
-                                            backdropFilter: 'blur(10px)',
-                                            WebkitBackdropFilter: 'blur(10px)',
-                                            transition: 'box-shadow 0.3s, border-color 0.3s, background 0.3s',
-                                        }}
-                                        whileHover={{ scale: 1.06, transition: { duration: 0.15 } }}
-                                        whileTap={{ scale: 0.93 }}
-                                    >
-                                        <motion.span
-                                            className="size-1.5 rounded-full flex-shrink-0"
-                                            style={{ background: isActive ? pillColor : 'rgba(255,255,255,0.2)' }}
-                                            animate={isActive ? { opacity: [1, 0.35, 1] } : { opacity: 1 }}
-                                            transition={{ duration: 1.4, repeat: Infinity }}
-                                        />
-                                        {recipe.title.toUpperCase()}
-                                    </motion.button>
-                                );
-                            })}
-                        </AnimatePresence>
-                    </div>
-                </div>
+            {/* ── Dot indicators (bottom) ─────────────────── */}
+            <div style={{
+                position: 'absolute', bottom: 24, left: 0, right: 0,
+                display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 7,
+                zIndex: 30,
+            }}>
+                {recipes.map((_, i) => (
+                    <motion.button
+                        key={i}
+                        onClick={() => setActiveIndex(i)}
+                        style={{
+                            height: 6, borderRadius: 999,
+                            background: 'transparent',
+                            border: 'none', cursor: 'pointer', padding: 0,
+                        }}
+                        animate={{
+                            width: i === activeIndex ? 22 : 6,
+                            backgroundColor: i === activeIndex
+                                ? 'rgba(255,255,255,0.80)'
+                                : 'rgba(255,255,255,0.22)',
+                        }}
+                        transition={{ duration: 0.25, ease: 'easeOut' }}
+                    />
+                ))}
             </div>
         </div>
     );

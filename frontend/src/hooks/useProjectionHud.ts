@@ -3,7 +3,7 @@ import { API_BASE_URL } from '../config';
 import { useWebSocket } from '../context/useWebSocket';
 import type { GestureAction, Recipe, ServerWebSocketMessage } from '../types/contracts';
 
-export type ProjectionHudMode = 'idle' | 'menu' | 'cooking';
+export type ProjectionHudMode = 'menu' | 'ingredient_check' | 'cooking';
 
 export interface ProjectionHudViewModel {
     mode: ProjectionHudMode;
@@ -28,6 +28,7 @@ export interface ProjectionHudViewModel {
     previousRecipe: () => void;
     nextStep: () => void;
     previousStep: () => void;
+    startCooking: () => void;
 }
 
 export function useProjectionHud(): ProjectionHudViewModel {
@@ -35,8 +36,9 @@ export function useProjectionHud(): ProjectionHudViewModel {
     const [recipes, setRecipes] = useState<Recipe[]>([]);
     const [isLoadingRecipes, setIsLoadingRecipes] = useState(true);
     const [recipeError, setRecipeError] = useState<string | null>(null);
-    const [isAppStarted, setIsAppStarted] = useState(false);
-    const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [isAppStarted, setIsAppStarted] = useState(true);
+    const [isMenuOpen, setIsMenuOpen] = useState(true);
+    const [isIngredientCheck, setIsIngredientCheck] = useState(false);
     const [selectedRecipeIndex, setSelectedRecipeIndex] = useState(0);
     const [currentRecipe, setCurrentRecipe] = useState<Recipe | null>(null);
     const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -88,8 +90,8 @@ export function useProjectionHud(): ProjectionHudViewModel {
     }, []);
 
     const reset = useCallback(() => {
-        setIsAppStarted(false);
-        setIsMenuOpen(false);
+        setIsMenuOpen(true);
+        setIsIngredientCheck(false);
         setCurrentRecipe(null);
         setCurrentStepIndex(0);
         setSelectedRecipeIndex(0);
@@ -126,7 +128,12 @@ export function useProjectionHud(): ProjectionHudViewModel {
         setCurrentStepIndex(0);
         setIsAppStarted(true);
         setIsMenuOpen(false);
+        setIsIngredientCheck(true);
     }, [recipes, selectedRecipeIndex]);
+
+    const startCooking = useCallback(() => {
+        setIsIngredientCheck(false);
+    }, []);
 
     const nextStep = useCallback(() => {
         setCurrentStepIndex(index => {
@@ -218,10 +225,10 @@ export function useProjectionHud(): ProjectionHudViewModel {
     const progressPercent = totalSteps > 0 ? (currentStepNumber / totalSteps) * 100 : 0;
 
     const mode: ProjectionHudMode = useMemo(() => {
-        if (!isAppStarted) return 'idle';
         if (isMenuOpen) return 'menu';
+        if (isIngredientCheck) return 'ingredient_check';
         return 'cooking';
-    }, [isAppStarted, isMenuOpen]);
+    }, [isIngredientCheck, isMenuOpen]);
 
     return {
         mode,
@@ -246,5 +253,6 @@ export function useProjectionHud(): ProjectionHudViewModel {
         previousRecipe,
         nextStep,
         previousStep,
+        startCooking,
     };
 }
