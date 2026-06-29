@@ -9,18 +9,18 @@ export interface GestureStatusRailProps {
 
 const gestureHints: Record<ProjectionHudMode, { gesture: string; action: string }[]> = {
     menu: [
-        { gesture: 'Left/Right index', action: 'NAVIGATE' },
+        { gesture: 'Right index up', action: 'NEXT RECIPE' },
+        { gesture: 'Left index up', action: 'PREV RECIPE' },
         { gesture: 'Closed fist', action: 'SELECT' },
-        { gesture: 'Open palm', action: 'BACK' },
     ],
     ingredient_check: [
-        { gesture: 'Hold item above zone', action: 'SCAN' },
         { gesture: 'Open palm', action: 'BACK TO MENU' },
+        { gesture: 'Hold item above zone', action: 'SCAN' },
     ],
     cooking: [
-        { gesture: 'Right index', action: 'NEXT STEP' },
-        { gesture: 'Left index', action: 'PREV STEP' },
-        { gesture: 'Closed fist', action: 'MENU' },
+        { gesture: 'Right index up', action: 'NEXT STEP' },
+        { gesture: 'Left index up', action: 'PREV STEP' },
+        { gesture: 'Open palm', action: 'BACK TO MENU' },
     ],
 };
 

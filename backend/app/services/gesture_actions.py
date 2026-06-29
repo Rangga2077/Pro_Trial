@@ -70,8 +70,8 @@ class GestureMonitor:
 
 @dataclass
 class GestureActionInterpreter:
-    required_frames: int = 3
-    dual_trigger_frames: int = 10
+    required_frames: int = 2
+    dual_trigger_frames: int = 20   # needs 20 sustained frames to avoid accidental RESET
     cooldown_seconds: float = settings.GESTURE_ACTION_COOLDOWN_SECONDS
     menu_opposite_guard_seconds: float = 0.4
     menu_swipe_release_seconds: float = 0.35
@@ -79,10 +79,10 @@ class GestureActionInterpreter:
     pointer_repeat_seconds: float = 0.75
     primary_release_seconds: float = 0.25
     trigger_cooldown_seconds: float = 2.0
-    swipe_threshold: float = settings.GESTURE_SWIPE_THRESHOLD
+    swipe_threshold: float = settings.GESTURE_SWIPE_THRESHOLD   # lower to 0.04 in .env for laptop webcam
     monitor_enabled: bool = settings.GESTURE_MONITOR_ENABLED
     monitor_sample_seconds: float = settings.GESTURE_MONITOR_SAMPLE_SECONDS
-    mode: str = "idle"
+    mode: str = "menu"
     gesture_counts: dict[str, int] = field(default_factory=dict)
     swipe_anchors: dict[str, SwipeAnchor] = field(default_factory=dict)
     pointer_active_action: GestureAction | None = None
@@ -126,7 +126,9 @@ class GestureActionInterpreter:
         if swipe_action != GestureAction.NO_ACTION:
             return swipe_action
 
-        primary_gesture = gestures[0].gesture
+        # Prefer action gestures over passive ones; check all detected hands
+        _PRIORITY = {"CLOSED_FIST": 3, "OPEN_PALM": 2, "FIVE_FINGERS": 2, "THREE_FINGERS": 1}
+        primary_gesture = max(gestures, key=lambda g: _PRIORITY.get(g.gesture, 0)).gesture
         self._update_primary_state(primary_gesture, current_time)
         if self.primary_active_gesture == primary_gesture:
             return GestureAction.NO_ACTION
@@ -167,12 +169,19 @@ class GestureActionInterpreter:
         has_left = any(gesture.hand == "Left" and gesture.gesture == "POINTING_UP" for gesture in gestures)
         has_right = any(gesture.hand == "Right" and gesture.gesture == "POINTING_UP" for gesture in gestures)
 
-        if self.mode == "menu" and has_left and not has_right:
+        # ── Session 1 (menu): raise one index finger — no movement required ──
+        # Only fires when exactly one hand is pointing (dual-hand → dual-trigger path).
+        if self.mode == "menu" and has_right and not has_left:
             return GestureAction.MENU_NEXT
+        if self.mode == "menu" and has_left and not has_right:
+            return GestureAction.MENU_PREVIOUS
+
+        # ── Session 3 (cooking): same logic for step navigation ──
         if self.mode == "cooking" and has_right and not has_left:
             return GestureAction.NEXT_STEP
         if self.mode == "cooking" and has_left and not has_right:
             return GestureAction.PREVIOUS_STEP
+
         return GestureAction.NO_ACTION
 
     def _update_pointer_state(self, is_pointing: bool, current_time: float):
@@ -209,26 +218,30 @@ class GestureActionInterpreter:
             self.primary_missing_since = None
 
     def _detect_swipe_action(self, gestures: list[RawGesture], current_time: float) -> GestureAction:
-        if self.mode == "menu":
-            self.swipe_anchors.clear()
-            return GestureAction.NO_ACTION
-        if self.mode == "cooking":
+        # Both menu and cooking use instant pointer actions — swipe detection not used for these modes.
+        if self.mode in ("cooking", "menu"):
             self.swipe_anchors.clear()
             return GestureAction.NO_ACTION
 
         pointing_gestures = [
-            gesture
-            for gesture in gestures
-            if gesture.gesture == "POINTING_UP" and gesture.index_x is not None and gesture.index_y is not None
+            g for g in gestures
+            if g.gesture == "POINTING_UP" and g.index_x is not None and g.index_y is not None
         ]
 
-        active_hands = {gesture.hand for gesture in pointing_gestures}
+        active_hands = {g.hand for g in pointing_gestures}
         self._age_inactive_swipe_anchors(active_hands, current_time)
 
-        if len(pointing_gestures) != 1:
-            return GestureAction.NO_ACTION
+        # Process EACH pointing hand independently — first hand that completes a swipe wins.
+        # Removed the old `len == 1` guard that blocked navigation when any second hand
+        # was accidentally detected as POINTING_UP.
+        for g in pointing_gestures:
+            action = self._process_hand_swipe(g, current_time)
+            if action != GestureAction.NO_ACTION:
+                return action
 
-        gesture = pointing_gestures[0]
+        return GestureAction.NO_ACTION
+
+    def _process_hand_swipe(self, gesture: RawGesture, current_time: float) -> GestureAction:
         assert gesture.index_x is not None
         assert gesture.index_y is not None
 
@@ -369,10 +382,11 @@ class GestureActionInterpreter:
 
     def _map_swipe_direction(self, direction: str) -> GestureAction:
         if self.mode == "menu":
-            if direction == "UP":
-                return GestureAction.MENU_PREVIOUS
-            if direction == "DOWN":
+            # Horizontal carousel: swipe right = next card, swipe left = previous card
+            if direction == "RIGHT":
                 return GestureAction.MENU_NEXT
+            if direction == "LEFT":
+                return GestureAction.MENU_PREVIOUS
 
         if self.mode == "cooking":
             if direction == "LEFT":
@@ -394,37 +408,39 @@ class GestureActionInterpreter:
         self.last_action_at = current_time
         self.gesture_counts.clear()
 
-        if self.mode == "idle":
-            self.mode = "menu"
-            self.pointer_active_action = GestureAction.MENU_NEXT
-            self.pointer_missing_since = None
-            self.pointer_last_action_at = current_time
-            return GestureAction.START_APP
-
-        self.mode = "idle"
+        # App no longer has an idle state — dual pointing always resets to menu
+        self.mode = "menu"
         self._reset_pointer_state()
         return GestureAction.RESET_APP
 
     def _map_primary_gesture(self, gesture: str) -> GestureAction:
         if gesture == "CLOSED_FIST":
             if self.mode == "cooking":
+                # In cooking (S3) or ingredient check (S2) — go back to menu
                 self.mode = "menu"
                 self._reset_pointer_state()
                 return GestureAction.BACK_TO_MENU
-
-            self.mode = "cooking"
-            self._reset_pointer_state()
-            return GestureAction.SELECT_RECIPE
-        if gesture in {"FIVE_FINGERS", "OPEN_PALM"}:
             if self.mode == "menu":
+                # Confirm recipe selection — advance to ingredient check (S2)
                 self.mode = "cooking"
                 self._reset_pointer_state()
-                return GestureAction.MENU_CLOSE
+                return GestureAction.SELECT_RECIPE
             return GestureAction.NO_ACTION
+
+        if gesture in {"FIVE_FINGERS", "OPEN_PALM"}:
+            if self.mode == "cooking":
+                # Open palm in S2 / S3 — return to recipe menu
+                self.mode = "menu"
+                self._reset_pointer_state()
+                return GestureAction.BACK_TO_MENU
+            # Open palm in menu — no-op (nothing to go back to)
+            return GestureAction.NO_ACTION
+
         if gesture == "THREE_FINGERS":
             self.mode = "menu"
             self._reset_pointer_state()
-            return GestureAction.START_APP
+            return GestureAction.RESET_APP
+
         return GestureAction.NO_ACTION
 
     def _reset_pointer_state(self):

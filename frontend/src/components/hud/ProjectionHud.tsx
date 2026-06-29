@@ -51,13 +51,11 @@ export const ProjectionHud: React.FC = () => {
                 />
             )}
 
-            {/* Gesture hint rail — shown only in menu mode */}
-            {hud.mode === 'menu' && (
-                <GestureStatusRail
-                    mode={hud.mode}
-                    lastAction={hud.lastAction}
-                />
-            )}
+            {/* Gesture hint rail — shown in all modes */}
+            <GestureStatusRail
+                mode={hud.mode}
+                lastAction={hud.lastAction}
+            />
 
             {/* Status overlay — shown only during ingredient check and cooking */}
             {(isCooking || isIngredientCheck) && (

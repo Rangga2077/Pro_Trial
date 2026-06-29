@@ -100,6 +100,7 @@ export function useProjectionHud(): ProjectionHudViewModel {
     const openMenu = useCallback(() => {
         setIsAppStarted(true);
         setIsMenuOpen(true);
+        setIsIngredientCheck(false);
     }, []);
 
     const closeMenu = useCallback(() => {
@@ -186,7 +187,8 @@ export function useProjectionHud(): ProjectionHudViewModel {
             return;
         }
 
-        if (!currentRecipe || isMenuOpen) return;
+        // Only advance cooking steps when actually in cooking mode
+        if (!currentRecipe || isMenuOpen || isIngredientCheck) return;
 
         if (action === 'NEXT_STEP') {
             nextStep();
@@ -200,6 +202,7 @@ export function useProjectionHud(): ProjectionHudViewModel {
         closeMenu,
         currentRecipe,
         isAppStarted,
+        isIngredientCheck,
         isMenuOpen,
         nextRecipe,
         nextStep,

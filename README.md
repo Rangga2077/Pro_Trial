@@ -139,18 +139,44 @@ npm run dev
 
 ## Gesture Vocabulary
 
+Navigation uses **index finger raise** — point the finger up and hold it still. No swiping or movement is required. The action fires once on detection and will not repeat until the finger is lowered and raised again.
+
+### Session 1 — Recipe Menu (Carousel)
+
+| Hand | Gesture | Action | Notes |
+|---|---|---|---|
+| Right only | Index finger up (`POINTING_UP`) | `MENU_NEXT` — advance one card right | Fire-once per raise; lower then re-raise to navigate again |
+| Left only | Index finger up (`POINTING_UP`) | `MENU_PREVIOUS` — go one card left | Same behaviour |
+| Either | Closed fist (`CLOSED_FIST`) | `SELECT_RECIPE` — confirm and enter ingredient check | Hold ~2 frames (~60 ms) |
+| Both (sustained) | Both index fingers up for ~660 ms | `RESET_APP` — reset to recipe menu | Requires deliberate hold; brief accidental detection is ignored |
+
+### Session 2 — Ingredient Check
+
 | Hand | Gesture | Action |
 |---|---|---|
-| Both hands | Index fingers up simultaneously | `START_APP` — (legacy, app starts in menu) |
-| Right index | Swipe right | `MENU_NEXT` — next recipe in carousel |
-| Left index | Swipe left | `MENU_PREVIOUS` — previous recipe |
-| Either | Closed fist | `SELECT_RECIPE` — confirm selection → Session 2 |
-| Either | Open palm | `RESET_APP` — return to menu |
-| Either | Closed fist (in menu) | `BACK_TO_MENU` — return from cooking |
-| Right index | Swipe right (cooking) | `NEXT_STEP` — advance cooking step |
-| Left index | Swipe left (cooking) | `PREVIOUS_STEP` — go back a step |
+| Either | Open palm (`OPEN_PALM`) | `BACK_TO_MENU` — return to carousel |
 
-Gesture sensitivity is tuned via `GESTURE_SWIPE_THRESHOLD` (default `0.06` normalized units) and `GESTURE_ACTION_COOLDOWN_SECONDS` (default `0.16 s`).
+_(Ingredient scanning is confirmed via the **START COOKING** button or future YOLO-matched detection)_
+
+### Session 3 — Cooking HUD
+
+| Hand | Gesture | Action | Notes |
+|---|---|---|---|
+| Right only | Index finger up | `NEXT_STEP` — advance to next cooking step | Fire-once per raise |
+| Left only | Index finger up | `PREVIOUS_STEP` — go back one step | Fire-once per raise |
+| Either | Open palm | `BACK_TO_MENU` — return to carousel | Hold ~2 frames |
+| Either | Closed fist | `BACK_TO_MENU` — return to carousel | Alternative back gesture |
+
+### Tuning (optional)
+
+Add to `backend/.env` to adjust responsiveness:
+
+```env
+# Seconds the finger must be absent before the action can re-fire (lower = faster repeat)
+GESTURE_ACTION_COOLDOWN_SECONDS=0.20
+```
+
+The `required_frames` threshold (default `2` frames ≈ 60 ms) determines how many consecutive frames a gesture must be held before firing. Raise it in code if accidental triggers occur in noisy lighting.
 
 ---
 
