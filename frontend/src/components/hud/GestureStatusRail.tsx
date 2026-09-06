@@ -16,11 +16,13 @@ const gestureHints: Record<ProjectionHudMode, { gesture: string; action: string 
     ingredient_check: [
         { gesture: 'Open palm', action: 'BACK TO MENU' },
         { gesture: 'Hold item above zone', action: 'SCAN' },
+        { gesture: 'Thumb up', action: 'TOGGLE THEME' },
     ],
     cooking: [
         { gesture: 'Right index up', action: 'NEXT STEP' },
         { gesture: 'Left index up', action: 'PREV STEP' },
         { gesture: 'Open palm', action: 'BACK TO MENU' },
+        { gesture: 'Thumb up', action: 'TOGGLE THEME' },
     ],
 };
 

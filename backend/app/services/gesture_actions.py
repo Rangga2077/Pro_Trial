@@ -127,7 +127,7 @@ class GestureActionInterpreter:
             return swipe_action
 
         # Prefer action gestures over passive ones; check all detected hands
-        _PRIORITY = {"CLOSED_FIST": 3, "OPEN_PALM": 2, "FIVE_FINGERS": 2, "THREE_FINGERS": 1}
+        _PRIORITY = {"CLOSED_FIST": 3, "OPEN_PALM": 2, "FIVE_FINGERS": 2, "THUMB_UP": 2, "THREE_FINGERS": 1}
         primary_gesture = max(gestures, key=lambda g: _PRIORITY.get(g.gesture, 0)).gesture
         self._update_primary_state(primary_gesture, current_time)
         if self.primary_active_gesture == primary_gesture:
@@ -440,6 +440,12 @@ class GestureActionInterpreter:
             self.mode = "menu"
             self._reset_pointer_state()
             return GestureAction.RESET_APP
+
+        if gesture == "THUMB_UP":
+            # Session 2 / 3 only — thumbs up flips the light/dark theme switcher.
+            if self.mode == "cooking":
+                return GestureAction.TOGGLE_THEME
+            return GestureAction.NO_ACTION
 
         return GestureAction.NO_ACTION
 

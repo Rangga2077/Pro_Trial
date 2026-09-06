@@ -42,6 +42,7 @@ export type GestureAction =
     | 'SELECT_RECIPE'
     | 'NEXT_STEP'
     | 'PREVIOUS_STEP'
+    | 'TOGGLE_THEME'
     | 'NO_ACTION';
 
 export interface CVUpdateMessage {

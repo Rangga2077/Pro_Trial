@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { useState } from 'react';
 import type { GestureAction, Ingredient, Recipe } from '../../types/contracts';
+import type { ThemeMode } from '../../hooks/useProjectionHud';
 
 export type ScanState = 'EMPTY' | 'DETECTING' | 'MATCHED' | 'WRONG ITEM' | 'READY';
 const SCAN_STATES: ScanState[] = ['EMPTY', 'DETECTING', 'MATCHED', 'WRONG ITEM', 'READY'];
@@ -11,6 +12,221 @@ export interface IngredientCheckProps {
     lastAction: GestureAction | null;
     onReady: () => void;
     onBack: () => void;
+    theme: ThemeMode;
+    onToggleTheme: () => void;
+}
+
+/* ── Theme palette ───────────────────────────────────────────────────
+ * Every color used across this screen, keyed by theme. Session 2 was
+ * originally a pure light design — dark mode gives it a slate/navy
+ * equivalent while keeping the same accent hues (blue/purple/green).
+ */
+const PALETTES = {
+    light: {
+        shellBg: '#F1F5F9',
+        cardBg: 'white',
+        cardBorder: '#E2E8F0',
+        sectionLabel: '#64748B',
+        pillBg: '#F8FAFC',
+        pillBorderWs: '#CBD5E1',
+        pillBorderGesture: '#C4B5FD',
+        pillText: '#475569',
+        tabBgActive: '#EFF6FF',
+        tabBgInactive: 'white',
+        tabBorderActive: '#0284C7',
+        tabBorderInactive: '#CBD5E1',
+        tabTextActive: '#0284C7',
+        tabTextInactive: '#64748B',
+        progressTrack: '#E2E8F0',
+        progressFill: '#0284C7',
+        titleText: '#1143B7',
+        badgeBg: '#EFF6FF',
+        badgeBorder: '#93C5FD',
+        badgeText: '#0284C7',
+        leftPanelBg: '#FAFAFA',
+        leftPanelBorder: '#E2E8F0',
+        rowBg: 'white',
+        rowBgChecked: '#F0FDF4',
+        rowBorder: '#E2E8F0',
+        rowBorderChecked: '#BBF7D0',
+        checkboxBg: 'white',
+        checkboxBgChecked: '#10B981',
+        checkboxBorder: '#CBD5E1',
+        checkboxBorderChecked: '#10B981',
+        avatarBg: '#E0F2FE',
+        avatarBgChecked: '#D1FAE5',
+        avatarText: '#0284C7',
+        avatarTextChecked: '#059669',
+        nameText: '#0F172A',
+        nameTextChecked: '#065F46',
+        tagTextOptional: '#94A3B8',
+        tagTextRequired: '#D97706',
+        amountText: '#0284C7',
+        utensilBg: 'white',
+        utensilBorder: '#E2E8F0',
+        utensilDot: '#93C5FD',
+        utensilText: '#475569',
+        utensilMetaText: '#94A3B8',
+        centerPanelBg: '#F8FAFC',
+        centerPanelBorder: '#E2E8F0',
+        cameraZoneBg: '#F0F9FF',
+        cameraZoneBorder: '#93C5FD',
+        cornerBracket: '#0284C7',
+        gradientTint: 'linear-gradient(180deg, rgba(2,132,199,0.05) 0%, transparent 100%)',
+        placeholderTitleText: '#0284C7',
+        placeholderSubText: '#94A3B8',
+        detectedPanelBg: '#FAFAFA',
+        detectedPanelBorder: '#E2E8F0',
+        detectedItemBg: '#FAFAFA',
+        detectedItemBorder: '#E2E8F0',
+        detectedItemText: '#CBD5E1',
+        guidePanelBg: '#FAFAFF',
+        guidePanelBorder: '#DDD6FE',
+        guideHeaderText: '#7C3AED',
+        guideBadgeBg: '#EDE9FE',
+        guideBadgeBorder: '#C4B5FD',
+        guideBadgeText: '#7C3AED',
+        guideRowLabel: '#7C3AED',
+        guideRowDesc: '#64748B',
+        guideDivider: '#F1F5F9',
+        voiceBorderTop: '#EDE9FE',
+        voiceText: '#7C3AED',
+        proceedBg: '#7C3AED',
+        proceedText: 'white',
+        footerBorderTop: '#E2E8F0',
+        footerBackText: '#94A3B8',
+        footerRecipeText: '#0F172A',
+        footerSessionText: '#64748B',
+        footerRemainingText: '#94A3B8',
+        wifiIcon: '#0284C7',
+        gestureIcon: '#7C3AED',
+        pointingIcon: '#A78BFA',
+        micBars: '#C4B5FD',
+        arrowIcon: '#CBD5E1',
+        scannerIcon: '#93C5FD',
+        switcherBg: '#F8FAFC',
+        switcherBorder: '#CBD5E1',
+        switcherIcon: '#475569',
+    },
+    dark: {
+        shellBg: '#0B0F19',
+        cardBg: '#151A26',
+        cardBorder: 'rgba(255,255,255,0.08)',
+        sectionLabel: '#8B96AB',
+        pillBg: 'rgba(255,255,255,0.04)',
+        pillBorderWs: 'rgba(255,255,255,0.14)',
+        pillBorderGesture: '#5B4FA8',
+        pillText: '#C4CCDA',
+        tabBgActive: 'rgba(56,132,222,0.16)',
+        tabBgInactive: 'rgba(255,255,255,0.03)',
+        tabBorderActive: '#3B82F6',
+        tabBorderInactive: 'rgba(255,255,255,0.14)',
+        tabTextActive: '#7DB4F5',
+        tabTextInactive: '#8B96AB',
+        progressTrack: 'rgba(255,255,255,0.08)',
+        progressFill: '#3B82F6',
+        titleText: '#7DA6FF',
+        badgeBg: 'rgba(56,132,222,0.14)',
+        badgeBorder: '#3B6CB0',
+        badgeText: '#7DB4F5',
+        leftPanelBg: 'rgba(255,255,255,0.03)',
+        leftPanelBorder: 'rgba(255,255,255,0.08)',
+        rowBg: 'rgba(255,255,255,0.03)',
+        rowBgChecked: 'rgba(16,185,129,0.10)',
+        rowBorder: 'rgba(255,255,255,0.08)',
+        rowBorderChecked: 'rgba(16,185,129,0.35)',
+        checkboxBg: 'rgba(255,255,255,0.05)',
+        checkboxBgChecked: '#10B981',
+        checkboxBorder: 'rgba(255,255,255,0.20)',
+        checkboxBorderChecked: '#10B981',
+        avatarBg: 'rgba(56,132,222,0.16)',
+        avatarBgChecked: 'rgba(16,185,129,0.18)',
+        avatarText: '#7DB4F5',
+        avatarTextChecked: '#34D399',
+        nameText: '#F1F4F9',
+        nameTextChecked: '#6EE7B7',
+        tagTextOptional: '#6B7280',
+        tagTextRequired: '#F0AA4E',
+        amountText: '#7DB4F5',
+        utensilBg: 'rgba(255,255,255,0.03)',
+        utensilBorder: 'rgba(255,255,255,0.08)',
+        utensilDot: '#3B6CB0',
+        utensilText: '#C4CCDA',
+        utensilMetaText: '#6B7280',
+        centerPanelBg: 'rgba(255,255,255,0.02)',
+        centerPanelBorder: 'rgba(255,255,255,0.08)',
+        cameraZoneBg: 'rgba(56,132,222,0.06)',
+        cameraZoneBorder: '#3B6CB0',
+        cornerBracket: '#3B82F6',
+        gradientTint: 'linear-gradient(180deg, rgba(59,130,246,0.08) 0%, transparent 100%)',
+        placeholderTitleText: '#7DB4F5',
+        placeholderSubText: '#6B7280',
+        detectedPanelBg: 'rgba(255,255,255,0.03)',
+        detectedPanelBorder: 'rgba(255,255,255,0.08)',
+        detectedItemBg: 'rgba(255,255,255,0.03)',
+        detectedItemBorder: 'rgba(255,255,255,0.08)',
+        detectedItemText: '#4B5563',
+        guidePanelBg: 'rgba(124,58,237,0.06)',
+        guidePanelBorder: '#4C3E8C',
+        guideHeaderText: '#B79CF5',
+        guideBadgeBg: 'rgba(124,58,237,0.18)',
+        guideBadgeBorder: '#5B4FA8',
+        guideBadgeText: '#B79CF5',
+        guideRowLabel: '#B79CF5',
+        guideRowDesc: '#8B96AB',
+        guideDivider: 'rgba(255,255,255,0.06)',
+        voiceBorderTop: 'rgba(255,255,255,0.08)',
+        voiceText: '#B79CF5',
+        proceedBg: '#7C3AED',
+        proceedText: 'white',
+        footerBorderTop: 'rgba(255,255,255,0.08)',
+        footerBackText: '#6B7280',
+        footerRecipeText: '#F1F4F9',
+        footerSessionText: '#8B96AB',
+        footerRemainingText: '#6B7280',
+        wifiIcon: '#7DB4F5',
+        gestureIcon: '#B79CF5',
+        pointingIcon: '#B79CF5',
+        micBars: '#B79CF5',
+        arrowIcon: '#6B7280',
+        scannerIcon: '#7DB4F5',
+        switcherBg: 'rgba(255,255,255,0.05)',
+        switcherBorder: 'rgba(255,255,255,0.20)',
+        switcherIcon: '#F1F4F9',
+    },
+};
+
+type Palette = typeof PALETTES.light;
+
+/** Sun/moon toggle button — click, or thumbs-up gesture, switches theme */
+function ThemeSwitcher({ theme, onToggle, palette }: { theme: ThemeMode; onToggle: () => void; palette: Palette }) {
+    return (
+        <button
+            onClick={onToggle}
+            aria-label="Toggle dark mode"
+            style={{
+                width: 33.60, height: 33.60,
+                background: palette.switcherBg,
+                borderRadius: 10,
+                border: `0.80px ${palette.switcherBorder} solid`,
+                cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0,
+                transition: 'background 0.18s ease, border-color 0.18s ease',
+            }}
+        >
+            {theme === 'dark' ? (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z" stroke={palette.switcherIcon} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+            ) : (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="4.5" stroke={palette.switcherIcon} strokeWidth="2" />
+                    <path d="M12 2v2.5M12 19.5V22M4.22 4.22l1.77 1.77M18 18l1.77 1.77M2 12h2.5M19.5 12H22M4.22 19.78l1.77-1.77M18 6l1.77-1.77" stroke={palette.switcherIcon} strokeWidth="2" strokeLinecap="round" />
+                </svg>
+            )}
+        </button>
+    );
 }
 
 function isOptional(ing: Ingredient): boolean {
@@ -26,12 +242,12 @@ function formatAmount(ing: Ingredient): string {
 /* ── Sub-components ─────────────────────────────────────────────────── */
 
 /** Wi-Fi signal icon (3 arcs shrinking downward) */
-function WifiIcon() {
+function WifiIcon({ color = '#0284C7' }: { color?: string }) {
     return (
         <div style={{ width: 12, height: 12, position: 'relative', overflow: 'hidden', flexShrink: 0 }}>
-            <div style={{ width: 10, height: 1.91, left: 1, top: 2.50, position: 'absolute', outline: '1px #0284C7 solid', outlineOffset: '-0.50px' }} />
-            <div style={{ width: 7, height: 1.43, left: 2.50, top: 5, position: 'absolute', outline: '1px #0284C7 solid', outlineOffset: '-0.50px' }} />
-            <div style={{ width: 3.50, height: 0.71, left: 4.25, top: 7.50, position: 'absolute', outline: '1px #0284C7 solid', outlineOffset: '-0.50px' }} />
+            <div style={{ width: 10, height: 1.91, left: 1, top: 2.50, position: 'absolute', outline: `1px ${color} solid`, outlineOffset: '-0.50px' }} />
+            <div style={{ width: 7, height: 1.43, left: 2.50, top: 5, position: 'absolute', outline: `1px ${color} solid`, outlineOffset: '-0.50px' }} />
+            <div style={{ width: 3.50, height: 0.71, left: 4.25, top: 7.50, position: 'absolute', outline: `1px ${color} solid`, outlineOffset: '-0.50px' }} />
         </div>
     );
 }
@@ -71,8 +287,20 @@ function BackFingerIcon({ color = '#A78BFA' }: { color?: string }) {
     );
 }
 
+/** Thumbs-up icon (theme switcher gesture) */
+function ThumbUpIcon({ color = '#A78BFA' }: { color?: string }) {
+    return (
+        <div style={{ width: 16, height: 16, position: 'relative', overflow: 'hidden', flexShrink: 0 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path d="M7 10v10H4a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1h3Z" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M7 10l4.5-7a1.5 1.5 0 0 1 2.7.9v4.6H18a2 2 0 0 1 2 2.3l-1 6A2 2 0 0 1 17 20h-8a2 2 0 0 1-2-2v-8Z" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+        </div>
+    );
+}
+
 /** Mic / sound-wave bars icon */
-function MicBarsIcon() {
+function MicBarsIcon({ color = '#C4B5FD' }: { color?: string }) {
     const bars = [
         { h: 8, inner: 3.53, top: 2.24 },
         { h: 14, inner: 7.26, top: 3.37 },
@@ -85,7 +313,7 @@ function MicBarsIcon() {
         <div style={{ height: 16, display: 'flex', alignItems: 'flex-end', gap: 2 }}>
             {bars.map((b, i) => (
                 <div key={i} style={{ width: 3, height: b.h, position: 'relative' }}>
-                    <div style={{ width: 3, height: b.inner, left: 0, top: b.top, position: 'absolute', opacity: opacities[i], background: '#C4B5FD', borderRadius: 1.5 + i * 0.2 }} />
+                    <div style={{ width: 3, height: b.inner, left: 0, top: b.top, position: 'absolute', opacity: opacities[i], background: color, borderRadius: 1.5 + i * 0.2 }} />
                 </div>
             ))}
         </div>
@@ -93,31 +321,31 @@ function MicBarsIcon() {
 }
 
 /** Arrow icon (chevron-right-like) */
-function ArrowIcon() {
+function ArrowIcon({ color = '#CBD5E1' }: { color?: string }) {
     return (
         <div style={{ width: 14, height: 14, position: 'relative', overflow: 'hidden', flexShrink: 0 }}>
-            <div style={{ width: 3.50, height: 7, left: 5.25, top: 3.50, position: 'absolute', outline: '1.17px #CBD5E1 solid', outlineOffset: '-0.58px' }} />
+            <div style={{ width: 3.50, height: 7, left: 5.25, top: 3.50, position: 'absolute', outline: `1.17px ${color} solid`, outlineOffset: '-0.58px' }} />
         </div>
     );
 }
 
 /** Barcode-like scanner icon for the detection zone placeholder */
-function ScannerIcon() {
+function ScannerIcon({ color = '#93C5FD' }: { color?: string }) {
     return (
         <div style={{ width: 48, height: 48, position: 'relative', overflow: 'hidden' }}>
-            <div style={{ width: 8, height: 14, left: 28, top: 8, position: 'absolute', outline: '4px #93C5FD solid', outlineOffset: '-2px' }} />
-            <div style={{ width: 8, height: 16, left: 20, top: 4, position: 'absolute', outline: '4px #93C5FD solid', outlineOffset: '-2px' }} />
-            <div style={{ width: 8, height: 20, left: 12, top: 8, position: 'absolute', outline: '4px #93C5FD solid', outlineOffset: '-2px' }} />
-            <div style={{ width: 40.21, height: 32, left: 3.79, top: 12, position: 'absolute', outline: '4px #93C5FD solid', outlineOffset: '-2px' }} />
+            <div style={{ width: 8, height: 14, left: 28, top: 8, position: 'absolute', outline: `4px ${color} solid`, outlineOffset: '-2px' }} />
+            <div style={{ width: 8, height: 16, left: 20, top: 4, position: 'absolute', outline: `4px ${color} solid`, outlineOffset: '-2px' }} />
+            <div style={{ width: 8, height: 20, left: 12, top: 8, position: 'absolute', outline: `4px ${color} solid`, outlineOffset: '-2px' }} />
+            <div style={{ width: 40.21, height: 32, left: 3.79, top: 12, position: 'absolute', outline: `4px ${color} solid`, outlineOffset: '-2px' }} />
         </div>
     );
 }
 
 /** Single ingredient row in the left panel */
-function IngredientRow({ ing, checked, onToggle }: { ing: Ingredient; checked: boolean; onToggle: () => void }) {
+function IngredientRow({ ing, checked, onToggle, palette }: { ing: Ingredient; checked: boolean; onToggle: () => void; palette: Palette }) {
     const optional = isOptional(ing);
-    const dotColor = checked ? '#10B981' : optional ? '#CBD5E1' : '#D97706';
-    const tagColor = optional ? '#94A3B8' : '#D97706';
+    const dotColor = checked ? '#10B981' : optional ? palette.tagTextOptional : '#D97706';
+    const tagColor = optional ? palette.tagTextOptional : palette.tagTextRequired;
     const tagText = optional ? '(OPTIONAL)' : '(REQUIRED)';
     const initial = (ing.name[0] ?? '?').toUpperCase();
     const amount = formatAmount(ing);
@@ -127,9 +355,9 @@ function IngredientRow({ ing, checked, onToggle }: { ing: Ingredient; checked: b
             onClick={onToggle}
             style={{
                 height: 56, minHeight: 56, position: 'relative',
-                background: checked ? '#F0FDF4' : 'white',
+                background: checked ? palette.rowBgChecked : palette.rowBg,
                 borderRadius: 14,
-                border: `0.80px ${checked ? '#BBF7D0' : '#E2E8F0'} solid`,
+                border: `0.80px ${checked ? palette.rowBorderChecked : palette.rowBorder} solid`,
                 display: 'flex', alignItems: 'center',
                 padding: '0 12.80px', gap: 10,
                 flexShrink: 0,
@@ -141,8 +369,8 @@ function IngredientRow({ ing, checked, onToggle }: { ing: Ingredient; checked: b
             <div style={{
                 width: 18, height: 18, borderRadius: 4, flexShrink: 0,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: checked ? '#10B981' : 'white',
-                border: `0.80px ${checked ? '#10B981' : '#CBD5E1'} solid`,
+                background: checked ? palette.checkboxBgChecked : palette.checkboxBg,
+                border: `0.80px ${checked ? palette.checkboxBorderChecked : palette.checkboxBorder} solid`,
                 transition: 'background 0.18s ease, border-color 0.18s ease',
             }}>
                 {checked && (
@@ -155,13 +383,13 @@ function IngredientRow({ ing, checked, onToggle }: { ing: Ingredient; checked: b
             {/* Avatar */}
             <div style={{
                 width: 28, height: 28,
-                background: checked ? '#D1FAE5' : '#E0F2FE',
+                background: checked ? palette.avatarBgChecked : palette.avatarBg,
                 borderRadius: 8,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 flexShrink: 0,
                 transition: 'background 0.18s ease',
             }}>
-                <span style={{ color: checked ? '#059669' : '#0284C7', fontSize: 9.60, fontFamily: 'Inter, sans-serif', fontWeight: 700, lineHeight: '14.40px' }}>
+                <span style={{ color: checked ? palette.avatarTextChecked : palette.avatarText, fontSize: 9.60, fontFamily: 'Inter, sans-serif', fontWeight: 700, lineHeight: '14.40px' }}>
                     {initial}
                 </span>
             </div>
@@ -169,7 +397,7 @@ function IngredientRow({ ing, checked, onToggle }: { ing: Ingredient; checked: b
             {/* Text block */}
             <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <div style={{
-                    color: checked ? '#065F46' : '#0F172A',
+                    color: checked ? palette.nameTextChecked : palette.nameText,
                     fontSize: 13.60, fontFamily: 'Inter, sans-serif',
                     fontWeight: 700, textTransform: 'uppercase', lineHeight: '20.40px',
                     letterSpacing: 0.54, overflow: 'hidden', whiteSpace: 'nowrap',
@@ -184,7 +412,7 @@ function IngredientRow({ ing, checked, onToggle }: { ing: Ingredient; checked: b
                         {tagText}
                     </span>
                     {amount && (
-                        <span style={{ color: '#0284C7', fontSize: 10.40, fontFamily: "'Cousine', 'Courier New', monospace", fontWeight: 400, lineHeight: '15.60px' }}>
+                        <span style={{ color: palette.amountText, fontSize: 10.40, fontFamily: "'Cousine', 'Courier New', monospace", fontWeight: 400, lineHeight: '15.60px' }}>
                             {amount}
                         </span>
                     )}
@@ -198,18 +426,18 @@ function IngredientRow({ ing, checked, onToggle }: { ing: Ingredient; checked: b
 }
 
 /** Single utensil row in the left panel */
-function UtensilRow({ name, optional = false }: { name: string; optional?: boolean }) {
+function UtensilRow({ name, optional = false, palette }: { name: string; optional?: boolean; palette: Palette }) {
     return (
         <div style={{
             display: 'flex', alignItems: 'center', gap: 12,
-            padding: '6px 12px', background: 'white',
-            borderRadius: 10, border: '0.80px #E2E8F0 solid',
+            padding: '6px 12px', background: palette.utensilBg,
+            borderRadius: 10, border: `0.80px ${palette.utensilBorder} solid`,
         }}>
-            <div style={{ width: 6, height: 6, background: '#93C5FD', borderRadius: 3, flexShrink: 0 }} />
-            <span style={{ color: '#475569', fontSize: 12, fontFamily: 'Inter, sans-serif', fontWeight: 400, lineHeight: '18px', flex: 1 }}>
+            <div style={{ width: 6, height: 6, background: palette.utensilDot, borderRadius: 3, flexShrink: 0 }} />
+            <span style={{ color: palette.utensilText, fontSize: 12, fontFamily: 'Inter, sans-serif', fontWeight: 400, lineHeight: '18px', flex: 1 }}>
                 {name}
             </span>
-            <span style={{ color: '#94A3B8', fontSize: 9.60, fontFamily: 'Inter, sans-serif', fontWeight: 400, lineHeight: '14.40px', whiteSpace: 'nowrap' }}>
+            <span style={{ color: palette.utensilMetaText, fontSize: 9.60, fontFamily: 'Inter, sans-serif', fontWeight: 400, lineHeight: '14.40px', whiteSpace: 'nowrap' }}>
                 ({optional ? 'optional' : 'required'})
             </span>
         </div>
@@ -223,9 +451,12 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
     lastAction,
     onReady,
     onBack,
+    theme,
+    onToggleTheme,
 }) => {
     const [scanState, setScanState] = useState<ScanState>('EMPTY');
     const [checkedSet, setCheckedSet] = useState<Set<number>>(new Set());
+    const palette = PALETTES[theme];
 
     const ingredients = recipe.ingredients;
     const requiredCount = ingredients.filter(i => !isOptional(i)).length;
@@ -246,7 +477,7 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
 
     /* Shared text styles */
     const sectionLabel: React.CSSProperties = {
-        color: '#64748B',
+        color: palette.sectionLabel,
         fontSize: 10.56,
         fontFamily: 'Inter, sans-serif',
         fontWeight: 600,
@@ -257,7 +488,7 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
 
     return (
         /* ── Outer shell ──────────────────────────────────────────── */
-        <div style={{ width: '100%', height: '100%', background: '#F1F5F9', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ width: '100%', height: '100%', background: palette.shellBg, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
 
             {/* Title-bar spacer (Electron frame area) */}
             <div style={{ height: 48.80, flexShrink: 0 }} />
@@ -265,14 +496,14 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
             {/* Content wrapper */}
             <div style={{ flex: 1, minHeight: 0, padding: 16.34, display: 'flex', flexDirection: 'column' }}>
 
-                {/* ── White card ──────────────────────────────────── */}
+                {/* ── Card ──────────────────────────────────────────── */}
                 <div style={{
                     flex: 1, minHeight: 0,
                     padding: 17.51,
-                    background: 'white',
+                    background: palette.cardBg,
                     overflow: 'hidden',
                     borderRadius: 36,
-                    border: '0.80px #E2E8F0 solid',
+                    border: `0.80px ${palette.cardBorder} solid`,
                     display: 'flex',
                     flexDirection: 'column',
                     gap: 9.60,
@@ -282,17 +513,17 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', flexShrink: 0 }}>
 
                         {/* Row 1: Status pills */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                             {/* WEBSOCKET CONNECTED */}
                             <div style={{
                                 height: 33.60, paddingLeft: 12, paddingRight: 12,
-                                background: '#F8FAFC', borderRadius: 10,
-                                border: '0.80px #CBD5E1 solid',
+                                background: palette.pillBg, borderRadius: 10,
+                                border: `0.80px ${palette.pillBorderWs} solid`,
                                 display: 'flex', alignItems: 'center', gap: 8,
                             }}>
-                                <WifiIcon />
+                                <WifiIcon color={palette.wifiIcon} />
                                 <div style={{ width: 9, height: 9, background: isConnected ? '#10B981' : '#FF3D5A', borderRadius: 4.50, flexShrink: 0 }} />
-                                <span style={{ color: '#475569', fontSize: 11.20, fontFamily: 'Inter, sans-serif', fontWeight: 700, textTransform: 'uppercase', lineHeight: '16.80px', letterSpacing: 1.12, whiteSpace: 'nowrap' }}>
+                                <span style={{ color: palette.pillText, fontSize: 11.20, fontFamily: 'Inter, sans-serif', fontWeight: 700, textTransform: 'uppercase', lineHeight: '16.80px', letterSpacing: 1.12, whiteSpace: 'nowrap' }}>
                                     WEBSOCKET {isConnected ? 'CONNECTED' : 'DISCONNECTED'}
                                 </span>
                             </div>
@@ -300,16 +531,20 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                             {/* LAST GESTURE */}
                             <div style={{
                                 height: 33.60, paddingLeft: 12, paddingRight: 12,
-                                background: '#F8FAFC', borderRadius: 10,
-                                border: '0.80px #C4B5FD solid',
+                                background: palette.pillBg, borderRadius: 10,
+                                border: `0.80px ${palette.pillBorderGesture} solid`,
                                 display: 'flex', alignItems: 'center', gap: 8,
+                                flex: 1, minWidth: 0,
                             }}>
-                                <GestureIcon />
-                                <div style={{ width: 9, height: 9, background: '#7C3AED', borderRadius: 4.50, flexShrink: 0 }} />
-                                <span style={{ color: '#475569', fontSize: 11.20, fontFamily: 'Inter, sans-serif', fontWeight: 700, textTransform: 'uppercase', lineHeight: '16.80px', letterSpacing: 1.12, whiteSpace: 'nowrap' }}>
+                                <GestureIcon color={palette.gestureIcon} />
+                                <div style={{ width: 9, height: 9, background: palette.gestureIcon, borderRadius: 4.50, flexShrink: 0 }} />
+                                <span style={{ color: palette.pillText, fontSize: 11.20, fontFamily: 'Inter, sans-serif', fontWeight: 700, textTransform: 'uppercase', lineHeight: '16.80px', letterSpacing: 1.12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                     {gestureText}
                                 </span>
                             </div>
+
+                            {/* Theme switcher */}
+                            <ThemeSwitcher theme={theme} onToggle={onToggleTheme} palette={palette} />
                         </div>
 
                         {/* Row 2: Scan state tabs (full-bleed) */}
@@ -319,7 +554,7 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                             width: 'calc(100% + 35.02px)',
                             paddingTop: 12,
                             paddingBottom: 12,
-                            borderBottom: '0.80px #E2E8F0 solid',
+                            borderBottom: `0.80px ${palette.cardBorder} solid`,
                             display: 'flex',
                             justifyContent: 'center',
                             alignItems: 'center',
@@ -334,14 +569,14 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                                         style={{
                                             paddingLeft: 14, paddingRight: 14,
                                             paddingTop: 4, paddingBottom: 4,
-                                            background: active ? '#EFF6FF' : 'white',
+                                            background: active ? palette.tabBgActive : palette.tabBgInactive,
                                             borderRadius: 999,
-                                            border: `0.80px ${active ? '#0284C7' : '#CBD5E1'} solid`,
+                                            border: `0.80px ${active ? palette.tabBorderActive : palette.tabBorderInactive} solid`,
                                             cursor: 'pointer',
                                             display: 'flex',
                                         }}>
                                         <span style={{
-                                            color: active ? '#0284C7' : '#64748B',
+                                            color: active ? palette.tabTextActive : palette.tabTextInactive,
                                             fontSize: 9.60,
                                             fontFamily: 'Inter, sans-serif',
                                             fontWeight: 700,
@@ -356,30 +591,30 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
 
                         {/* Row 3: Progress */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                            <span style={{ color: '#64748B', fontSize: 10.56, fontFamily: 'Inter, sans-serif', fontWeight: 400, textTransform: 'uppercase', lineHeight: '15.84px', letterSpacing: 3.17, whiteSpace: 'nowrap' }}>
+                            <span style={{ color: palette.sectionLabel, fontSize: 10.56, fontFamily: 'Inter, sans-serif', fontWeight: 400, textTransform: 'uppercase', lineHeight: '15.84px', letterSpacing: 3.17, whiteSpace: 'nowrap' }}>
                                 PROGRESS
                             </span>
-                            <div style={{ flex: 1, height: 8, background: '#E2E8F0', borderRadius: 999, overflow: 'hidden', minWidth: 1 }}>
+                            <div style={{ flex: 1, height: 8, background: palette.progressTrack, borderRadius: 999, overflow: 'hidden', minWidth: 1 }}>
                                 <motion.div
-                                    style={{ height: '100%', background: '#0284C7', borderRadius: 999 }}
+                                    style={{ height: '100%', background: palette.progressFill, borderRadius: 999 }}
                                     initial={{ width: 0 }}
                                     animate={{ width: requiredCount > 0 ? `${(matchedCount / requiredCount) * 100}%` : '0%' }}
                                     transition={{ duration: 0.5, ease: 'easeOut' }}
                                 />
                             </div>
-                            <span style={{ color: '#0284C7', fontSize: 13.60, fontFamily: "'Cousine', 'Courier New', monospace", fontWeight: 700, lineHeight: '20.40px', whiteSpace: 'nowrap' }}>
+                            <span style={{ color: palette.progressFill, fontSize: 13.60, fontFamily: "'Cousine', 'Courier New', monospace", fontWeight: 700, lineHeight: '20.40px', whiteSpace: 'nowrap' }}>
                                 {matchedCount}/{requiredCount}
                             </span>
                         </div>
 
                         {/* Row 4: Divider */}
-                        <div style={{ height: 1, background: '#E2E8F0' }} />
+                        <div style={{ height: 1, background: palette.cardBorder }} />
                     </div>
 
                     {/* ── RECIPE TITLE ROW ────────────────────────── */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
                         <span style={{
-                            color: '#1143B7',
+                            color: palette.titleText,
                             fontSize: 19.20,
                             fontFamily: "'Instrument Sans', Inter, sans-serif",
                             fontWeight: 500,
@@ -393,13 +628,13 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                         {/* Required badge */}
                         <div style={{
                             paddingLeft: 14, paddingRight: 14, paddingTop: 5, paddingBottom: 5,
-                            background: '#EFF6FF', borderRadius: 999,
-                            border: '0.80px #93C5FD solid',
+                            background: palette.badgeBg, borderRadius: 999,
+                            border: `0.80px ${palette.badgeBorder} solid`,
                             display: 'flex', alignItems: 'center', gap: 8,
                             flexShrink: 0,
                         }}>
                             <span style={{
-                                color: '#0284C7',
+                                color: palette.badgeText,
                                 fontSize: 13.60,
                                 fontFamily: "'Dangrek', Inter, sans-serif",
                                 fontWeight: 400,
@@ -409,7 +644,7 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                             }}>
                                 {matchedCount}/{requiredCount} REQUIRED
                             </span>
-                            <div style={{ width: 6.82, height: 6.82, background: '#0284C7', borderRadius: 3.41, opacity: 0.66 }} />
+                            <div style={{ width: 6.82, height: 6.82, background: palette.badgeText, borderRadius: 3.41, opacity: 0.66 }} />
                         </div>
                     </div>
 
@@ -419,9 +654,9 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                         {/* ──── LEFT: INGREDIENTS + UTENSILS ───────── */}
                         <div style={{
                             width: 256, flexShrink: 0,
-                            background: '#FAFAFA',
+                            background: palette.leftPanelBg,
                             borderRadius: 24,
-                            border: '0.80px #E2E8F0 solid',
+                            border: `0.80px ${palette.leftPanelBorder} solid`,
                             padding: 16,
                             display: 'flex',
                             flexDirection: 'column',
@@ -438,6 +673,7 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                                         ing={ing}
                                         checked={checkedSet.has(i)}
                                         onToggle={() => toggleIngredient(i)}
+                                        palette={palette}
                                     />
                                 ))}
 
@@ -447,18 +683,18 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                                 {/* UTENSILS label */}
                                 <div style={{ ...sectionLabel, marginBottom: 2, flexShrink: 0 }}>UTENSILS</div>
 
-                                <UtensilRow name="Wok" />
-                                <UtensilRow name="Spatula" />
-                                <UtensilRow name="Cutting Board" optional />
+                                <UtensilRow name="Wok" palette={palette} />
+                                <UtensilRow name="Spatula" palette={palette} />
+                                <UtensilRow name="Cutting Board" optional palette={palette} />
                             </div>
                         </div>
 
                         {/* ──── CENTER: CAMERA / DETECTION ZONE ────── */}
                         <div style={{
                             flex: 1, minWidth: 0,
-                            background: '#F8FAFC',
+                            background: palette.centerPanelBg,
                             borderRadius: 20,
-                            border: '0.80px #E2E8F0 solid',
+                            border: `0.80px ${palette.centerPanelBorder} solid`,
                             padding: 16,
                             display: 'flex',
                             flexDirection: 'column',
@@ -467,19 +703,19 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                             <div style={{
                                 flex: 1, minHeight: 0,
                                 position: 'relative',
-                                background: '#F0F9FF',
+                                background: palette.cameraZoneBg,
                                 overflow: 'hidden',
                                 borderRadius: 16,
-                                border: '1.60px #93C5FD solid',
+                                border: `1.60px ${palette.cameraZoneBorder} solid`,
                             }}>
                                 {/* Corner brackets */}
-                                <div style={{ width: 24, height: 24, position: 'absolute', left: 1.60, top: 1.60, borderRadius: 3, borderLeft: '1.60px #0284C7 solid', borderTop: '1.60px #0284C7 solid' }} />
-                                <div style={{ width: 24, height: 24, position: 'absolute', right: 1.60, top: 1.60, borderRadius: 3, borderTop: '1.60px #0284C7 solid', borderRight: '1.60px #0284C7 solid' }} />
-                                <div style={{ width: 24, height: 24, position: 'absolute', left: 1.60, bottom: 1.60, borderRadius: 3, borderLeft: '1.60px #0284C7 solid', borderBottom: '1.60px #0284C7 solid' }} />
-                                <div style={{ width: 24, height: 24, position: 'absolute', right: 1.60, bottom: 1.60, borderRadius: 3, borderRight: '1.60px #0284C7 solid', borderBottom: '1.60px #0284C7 solid' }} />
+                                <div style={{ width: 24, height: 24, position: 'absolute', left: 1.60, top: 1.60, borderRadius: 3, borderLeft: `1.60px ${palette.cornerBracket} solid`, borderTop: `1.60px ${palette.cornerBracket} solid` }} />
+                                <div style={{ width: 24, height: 24, position: 'absolute', right: 1.60, top: 1.60, borderRadius: 3, borderTop: `1.60px ${palette.cornerBracket} solid`, borderRight: `1.60px ${palette.cornerBracket} solid` }} />
+                                <div style={{ width: 24, height: 24, position: 'absolute', left: 1.60, bottom: 1.60, borderRadius: 3, borderLeft: `1.60px ${palette.cornerBracket} solid`, borderBottom: `1.60px ${palette.cornerBracket} solid` }} />
+                                <div style={{ width: 24, height: 24, position: 'absolute', right: 1.60, bottom: 1.60, borderRadius: 3, borderRight: `1.60px ${palette.cornerBracket} solid`, borderBottom: `1.60px ${palette.cornerBracket} solid` }} />
 
                                 {/* Subtle gradient tint */}
-                                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(2,132,199,0.05) 0%, transparent 100%)', borderRadius: 16 }} />
+                                <div style={{ position: 'absolute', inset: 0, background: palette.gradientTint, borderRadius: 16 }} />
 
                                 {/* EMPTY STATE: Scan placeholder (replaced by camera feed later) */}
                                 <div style={{
@@ -490,11 +726,11 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                                     gap: 0,
                                 }}>
                                     <div style={{ marginBottom: 16 }}>
-                                        <ScannerIcon />
+                                        <ScannerIcon color={palette.scannerIcon} />
                                     </div>
                                     <div style={{ marginBottom: 8, textAlign: 'center' }}>
                                         <span style={{
-                                            color: '#0284C7', fontSize: 16,
+                                            color: palette.placeholderTitleText, fontSize: 16,
                                             fontFamily: 'Inter, sans-serif', fontWeight: 500,
                                             textTransform: 'uppercase', lineHeight: '24px',
                                             letterSpacing: 2.40,
@@ -503,7 +739,7 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                                         </span>
                                     </div>
                                     <span style={{
-                                        color: '#94A3B8', fontSize: 12,
+                                        color: palette.placeholderSubText, fontSize: 12,
                                         fontFamily: 'Inter, sans-serif', fontWeight: 400,
                                         lineHeight: '18px', textAlign: 'center',
                                     }}>
@@ -545,9 +781,9 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
 
                             {/* DETECTED ITEMS panel */}
                             <div style={{
-                                background: '#FAFAFA',
+                                background: palette.detectedPanelBg,
                                 borderRadius: 24,
-                                border: '0.80px #E2E8F0 solid',
+                                border: `0.80px ${palette.detectedPanelBorder} solid`,
                                 padding: 16,
                                 display: 'flex',
                                 flexDirection: 'column',
@@ -557,12 +793,12 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                                     {Array.from({ length: 3 }).map((_, i) => (
                                         <div key={i} style={{
-                                            height: 44, background: '#FAFAFA',
-                                            borderRadius: 14, border: '0.80px #E2E8F0 solid',
+                                            height: 44, background: palette.detectedItemBg,
+                                            borderRadius: 14, border: `0.80px ${palette.detectedItemBorder} solid`,
                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                                         }}>
                                             {/* placeholder — YOLO will populate this */}
-                                            <span style={{ color: '#CBD5E1', fontSize: 9, fontFamily: 'Inter, sans-serif', letterSpacing: 1.5 }}>
+                                            <span style={{ color: palette.detectedItemText, fontSize: 9, fontFamily: 'Inter, sans-serif', letterSpacing: 1.5 }}>
                                                 WAITING FOR DETECTION
                                             </span>
                                         </div>
@@ -572,9 +808,9 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
 
                             {/* GESTURE GUIDE panel */}
                             <div style={{
-                                background: '#FAFAFF',
+                                background: palette.guidePanelBg,
                                 borderRadius: 20,
-                                border: '0.80px #DDD6FE solid',
+                                border: `0.80px ${palette.guidePanelBorder} solid`,
                                 padding: 16,
                                 display: 'flex',
                                 flexDirection: 'column',
@@ -582,21 +818,21 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                             }}>
                                 {/* Header row */}
                                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 0, height: 35 }}>
-                                    <GestureIcon color="#7C3AED" size={16} />
+                                    <GestureIcon color={palette.guideHeaderText} size={16} />
                                     <span style={{
-                                        color: '#7C3AED', fontSize: 11.20, fontFamily: 'Inter, sans-serif',
+                                        color: palette.guideHeaderText, fontSize: 11.20, fontFamily: 'Inter, sans-serif',
                                         fontWeight: 700, textTransform: 'uppercase', lineHeight: '16.80px', letterSpacing: 1.68,
                                     }}>GESTURE GUIDE</span>
                                     {/* INGREDIENT CHECK badge */}
                                     <div style={{
                                         position: 'absolute', right: 0, top: 2.83,
-                                        background: '#EDE9FE', borderRadius: 999,
-                                        border: '0.80px #C4B5FD solid',
+                                        background: palette.guideBadgeBg, borderRadius: 999,
+                                        border: `0.80px ${palette.guideBadgeBorder} solid`,
                                         padding: '8px 8.80px',
                                         display: 'flex', alignItems: 'center',
                                     }}>
                                         <span style={{
-                                            color: '#7C3AED', fontSize: 8.80, fontFamily: 'Inter, sans-serif',
+                                            color: palette.guideBadgeText, fontSize: 8.80, fontFamily: 'Inter, sans-serif',
                                             fontWeight: 700, textTransform: 'uppercase', lineHeight: '13.20px', letterSpacing: 0.88,
                                         }}>INGREDIENT CHECK</span>
                                     </div>
@@ -607,39 +843,51 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                                     {/* SCAN gesture */}
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 8 }}>
                                         <div style={{ width: 20, display: 'flex', alignItems: 'center' }}>
-                                            <PointingUpIcon />
+                                            <PointingUpIcon color={palette.pointingIcon} />
                                         </div>
-                                        <span style={{ color: '#7C3AED', fontSize: 11.20, fontFamily: 'Inter, sans-serif', fontWeight: 700, textTransform: 'uppercase', lineHeight: '16.80px', letterSpacing: 0.67, width: 64, flexShrink: 0 }}>SCAN</span>
-                                        <span style={{ color: '#64748B', fontSize: 10.40, fontFamily: 'Inter, sans-serif', fontWeight: 400, lineHeight: '15.60px' }}>Hold item over detection zone</span>
+                                        <span style={{ color: palette.guideRowLabel, fontSize: 11.20, fontFamily: 'Inter, sans-serif', fontWeight: 700, textTransform: 'uppercase', lineHeight: '16.80px', letterSpacing: 0.67, width: 64, flexShrink: 0 }}>SCAN</span>
+                                        <span style={{ color: palette.guideRowDesc, fontSize: 10.40, fontFamily: 'Inter, sans-serif', fontWeight: 400, lineHeight: '15.60px' }}>Hold item over detection zone</span>
                                     </div>
 
                                     {/* Divider */}
-                                    <div style={{ height: 1, background: '#F1F5F9', margin: '5px 0' }} />
+                                    <div style={{ height: 1, background: palette.guideDivider, margin: '5px 0' }} />
 
                                     {/* BACK gesture */}
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 8 }}>
                                         <div style={{ width: 20, display: 'flex', alignItems: 'center' }}>
-                                            <BackFingerIcon />
+                                            <BackFingerIcon color={palette.pointingIcon} />
                                         </div>
-                                        <span style={{ color: '#7C3AED', fontSize: 11.20, fontFamily: 'Inter, sans-serif', fontWeight: 700, textTransform: 'uppercase', lineHeight: '16.80px', letterSpacing: 0.67, width: 64, flexShrink: 0 }}>BACK</span>
-                                        <span style={{ color: '#64748B', fontSize: 10.40, fontFamily: 'Inter, sans-serif', fontWeight: 400, lineHeight: '15.60px' }}>Return to recipe menu</span>
+                                        <span style={{ color: palette.guideRowLabel, fontSize: 11.20, fontFamily: 'Inter, sans-serif', fontWeight: 700, textTransform: 'uppercase', lineHeight: '16.80px', letterSpacing: 0.67, width: 64, flexShrink: 0 }}>BACK</span>
+                                        <span style={{ color: palette.guideRowDesc, fontSize: 10.40, fontFamily: 'Inter, sans-serif', fontWeight: 400, lineHeight: '15.60px' }}>Return to recipe menu</span>
+                                    </div>
+
+                                    {/* Divider */}
+                                    <div style={{ height: 1, background: palette.guideDivider, margin: '5px 0' }} />
+
+                                    {/* THEME gesture */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 8 }}>
+                                        <div style={{ width: 20, display: 'flex', alignItems: 'center' }}>
+                                            <ThumbUpIcon color={palette.pointingIcon} />
+                                        </div>
+                                        <span style={{ color: palette.guideRowLabel, fontSize: 11.20, fontFamily: 'Inter, sans-serif', fontWeight: 700, textTransform: 'uppercase', lineHeight: '16.80px', letterSpacing: 0.67, width: 64, flexShrink: 0 }}>THEME</span>
+                                        <span style={{ color: palette.guideRowDesc, fontSize: 10.40, fontFamily: 'Inter, sans-serif', fontWeight: 400, lineHeight: '15.60px' }}>Thumbs up — switch light/dark</span>
                                     </div>
                                 </div>
 
                                 {/* Voice confirm row */}
                                 <div style={{ paddingTop: 8, display: 'flex', flexDirection: 'column' }}>
-                                    <div style={{ paddingTop: 8, borderTop: '0.80px #EDE9FE solid', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div style={{ paddingTop: 8, borderTop: `0.80px ${palette.voiceBorderTop} solid`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                             {/* Mic icon */}
                                             <div style={{ width: 14, height: 14, position: 'relative', overflow: 'hidden', flexShrink: 0 }}>
-                                                <div style={{ width: 3.50, height: 7.58, left: 5.25, top: 1.17, position: 'absolute', outline: '1.17px #7C3AED solid', outlineOffset: '-0.58px' }} />
-                                                <div style={{ width: 8.17, height: 5.25, left: 2.92, top: 5.83, position: 'absolute', outline: '1.17px #7C3AED solid', outlineOffset: '-0.58px' }} />
+                                                <div style={{ width: 3.50, height: 7.58, left: 5.25, top: 1.17, position: 'absolute', outline: `1.17px ${palette.voiceText} solid`, outlineOffset: '-0.58px' }} />
+                                                <div style={{ width: 8.17, height: 5.25, left: 2.92, top: 5.83, position: 'absolute', outline: `1.17px ${palette.voiceText} solid`, outlineOffset: '-0.58px' }} />
                                             </div>
-                                            <span style={{ color: '#7C3AED', fontSize: 10.40, fontFamily: 'Inter, sans-serif', fontWeight: 500, lineHeight: '15.60px', letterSpacing: 0.52 }}>
+                                            <span style={{ color: palette.voiceText, fontSize: 10.40, fontFamily: 'Inter, sans-serif', fontWeight: 500, lineHeight: '15.60px', letterSpacing: 0.52 }}>
                                                 SAY &quot;READY&quot; TO CONFIRM
                                             </span>
                                         </div>
-                                        <MicBarsIcon />
+                                        <MicBarsIcon color={palette.micBars} />
                                     </div>
                                 </div>
 
@@ -650,7 +898,7 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                                         marginTop: 'auto',
                                         paddingTop: 8,
                                         paddingBottom: 8,
-                                        background: '#7C3AED',
+                                        background: palette.proceedBg,
                                         border: 'none',
                                         borderRadius: 999,
                                         cursor: 'pointer',
@@ -659,7 +907,7 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                                         justifyContent: 'center',
                                     }}
                                 >
-                                    <span style={{ color: 'white', fontSize: 11.20, fontFamily: 'Inter, sans-serif', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.68 }}>
+                                    <span style={{ color: palette.proceedText, fontSize: 11.20, fontFamily: 'Inter, sans-serif', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.68 }}>
                                         START COOKING →
                                     </span>
                                 </button>
@@ -670,7 +918,7 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                     {/* ── FOOTER ──────────────────────────────────── */}
                     <div style={{
                         paddingTop: 9.60,
-                        borderTop: '0.80px #E2E8F0 solid',
+                        borderTop: `0.80px ${palette.footerBorderTop} solid`,
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
@@ -681,13 +929,13 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                                 onClick={onBack}
                                 style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
                             >
-                                <ArrowIcon />
-                                <span style={{ color: '#94A3B8', fontSize: 11.20, fontFamily: 'Inter, sans-serif', fontWeight: 400, textTransform: 'uppercase', lineHeight: '16.80px', letterSpacing: 0.90 }}>Recipe:</span>
+                                <ArrowIcon color={palette.arrowIcon} />
+                                <span style={{ color: palette.footerBackText, fontSize: 11.20, fontFamily: 'Inter, sans-serif', fontWeight: 400, textTransform: 'uppercase', lineHeight: '16.80px', letterSpacing: 0.90 }}>Recipe:</span>
                             </button>
-                            <span style={{ color: '#0F172A', fontSize: 12, fontFamily: 'Inter, sans-serif', fontWeight: 500, lineHeight: '18px' }}>{recipe.title}</span>
-                            <span style={{ color: '#64748B', fontSize: 11.20, fontFamily: 'Inter, sans-serif', fontWeight: 400, lineHeight: '16.80px' }}>Session 2 of 3</span>
+                            <span style={{ color: palette.footerRecipeText, fontSize: 12, fontFamily: 'Inter, sans-serif', fontWeight: 500, lineHeight: '18px' }}>{recipe.title}</span>
+                            <span style={{ color: palette.footerSessionText, fontSize: 11.20, fontFamily: 'Inter, sans-serif', fontWeight: 400, lineHeight: '16.80px' }}>Session 2 of 3</span>
                         </div>
-                        <span style={{ color: '#94A3B8', fontSize: 10.40, fontFamily: "'Cousine', 'Courier New', monospace", fontWeight: 400, lineHeight: '15.60px' }}>
+                        <span style={{ color: palette.footerRemainingText, fontSize: 10.40, fontFamily: "'Cousine', 'Courier New', monospace", fontWeight: 400, lineHeight: '15.60px' }}>
                             {itemsRemaining} ITEMS REMAINING
                         </span>
                     </div>

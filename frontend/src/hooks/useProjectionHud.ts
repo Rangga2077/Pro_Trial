@@ -4,6 +4,7 @@ import { useWebSocket } from '../context/useWebSocket';
 import type { GestureAction, Recipe, ServerWebSocketMessage } from '../types/contracts';
 
 export type ProjectionHudMode = 'menu' | 'ingredient_check' | 'cooking';
+export type ThemeMode = 'light' | 'dark';
 
 export interface ProjectionHudViewModel {
     mode: ProjectionHudMode;
@@ -20,6 +21,7 @@ export interface ProjectionHudViewModel {
     progressPercent: number;
     lastAction: GestureAction | null;
     isConnected: boolean;
+    theme: ThemeMode;
     openMenu: () => void;
     closeMenu: () => void;
     reset: () => void;
@@ -29,6 +31,7 @@ export interface ProjectionHudViewModel {
     nextStep: () => void;
     previousStep: () => void;
     startCooking: () => void;
+    toggleTheme: () => void;
 }
 
 export function useProjectionHud(): ProjectionHudViewModel {
@@ -42,6 +45,7 @@ export function useProjectionHud(): ProjectionHudViewModel {
     const [selectedRecipeIndex, setSelectedRecipeIndex] = useState(0);
     const [currentRecipe, setCurrentRecipe] = useState<Recipe | null>(null);
     const [currentStepIndex, setCurrentStepIndex] = useState(0);
+    const [theme, setTheme] = useState<ThemeMode>('light');
 
     const handledMessageRef = useRef<ServerWebSocketMessage | null>(null);
 
@@ -136,6 +140,10 @@ export function useProjectionHud(): ProjectionHudViewModel {
         setIsIngredientCheck(false);
     }, []);
 
+    const toggleTheme = useCallback(() => {
+        setTheme(current => (current === 'light' ? 'dark' : 'light'));
+    }, []);
+
     const nextStep = useCallback(() => {
         setCurrentStepIndex(index => {
             if (!currentRecipe) return index;
@@ -187,6 +195,11 @@ export function useProjectionHud(): ProjectionHudViewModel {
             return;
         }
 
+        if (action === 'TOGGLE_THEME') {
+            if (!isMenuOpen) toggleTheme();
+            return;
+        }
+
         // Only advance cooking steps when actually in cooking mode
         if (!currentRecipe || isMenuOpen || isIngredientCheck) return;
 
@@ -211,6 +224,7 @@ export function useProjectionHud(): ProjectionHudViewModel {
         previousStep,
         reset,
         selectRecipe,
+        toggleTheme,
     ]);
 
     useEffect(() => {
@@ -248,6 +262,8 @@ export function useProjectionHud(): ProjectionHudViewModel {
         progressPercent,
         lastAction,
         isConnected,
+        theme,
+        toggleTheme,
         openMenu,
         closeMenu,
         reset,

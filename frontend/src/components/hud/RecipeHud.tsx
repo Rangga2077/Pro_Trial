@@ -1,6 +1,8 @@
 import { motion } from 'framer-motion';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, Pause, Play, RotateCcw, X } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import type { Recipe, GestureAction } from '../../types/contracts';
+import type { ThemeMode } from '../../hooks/useProjectionHud';
 import svgPaths from '../svgTimerRings';
 
 export interface RecipeHudProps {
@@ -14,43 +16,142 @@ export interface RecipeHudProps {
     onOpenMenu: () => void;
     isConnected: boolean;
     lastAction: GestureAction | null;
+    theme: ThemeMode;
+    onToggleTheme: () => void;
 }
 
-function formatClock(minutes: number | null | undefined, fallback: string): string {
-    if (minutes == null) return fallback;
-    const m = Math.floor(minutes);
-    const s = Math.round((minutes - m) * 60);
+/* ── Theme palette ───────────────────────────────────────────────────
+ * S3 was originally a "dark stage, cream card" design — the card itself
+ * stayed light regardless of the outer backdrop. Dark mode flips the
+ * card to a slate/navy surface while keeping the same purple/red accents.
+ */
+const PALETTES = {
+    light: {
+        cardBg: '#F5F4F0',
+        cardBorderOverlay: 'rgba(107, 94, 184, 0.20)',
+        pillBg: 'rgba(245, 244, 240, 0.95)',
+        pillBorderWs: 'rgba(107, 94, 184, 0.30)',
+        pillBorderGesture: 'rgba(255, 61, 90, 0.34)',
+        pillText: '#6B7080',
+        sectionLabel: 'rgba(107, 94, 184, 0.85)',
+        progressTrack: 'rgba(60, 55, 100, 0.07)',
+        primaryText: '#1E1B3A',
+        secondaryText: 'rgba(30, 27, 58, 0.65)',
+        secondaryTextDim: 'rgba(30, 27, 58, 0.45)',
+        divider: 'rgba(40, 38, 72, 0.08)',
+        panelBaseBg: 'rgba(60, 55, 100, 0.04)',
+        panelOverlayBg: 'rgba(40, 38, 72, 0.08)',
+        panelOverlayBorder: 'rgba(40, 38, 72, 0.10)',
+        glowOuter: 'rgba(107, 94, 184, 0.06)',
+        glowMiddle: 'rgba(107, 94, 184, 0.10)',
+        backBtnBg: 'rgba(40, 38, 72, 0.08)',
+        backBtnBorder: 'rgba(40, 38, 72, 0.10)',
+        chevronColor: 'rgba(107, 94, 184, 0.70)',
+        ingredientSquareBg: 'rgba(40, 38, 72, 0.08)',
+        ingredientSquareBorder: 'rgba(40, 38, 72, 0.10)',
+        utensilDot: 'rgba(107, 94, 184, 0.55)',
+        utensilText: '#6B7080',
+        notesBg: 'rgba(40, 38, 72, 0.08)',
+        notesBorder: 'rgba(40, 38, 72, 0.10)',
+        notesText: 'rgba(30, 27, 58, 0.45)',
+        switcherBg: 'rgba(40, 38, 72, 0.08)',
+        switcherBorder: 'rgba(40, 38, 72, 0.10)',
+        switcherIcon: 'rgba(107, 94, 184, 0.85)',
+        cancelBg: 'rgba(255, 61, 90, 0.08)',
+        cancelBorder: 'rgba(255, 61, 90, 0.35)',
+        cancelText: '#E11D48',
+    },
+    dark: {
+        cardBg: '#181A26',
+        cardBorderOverlay: 'rgba(155, 143, 212, 0.22)',
+        pillBg: 'rgba(24, 26, 38, 0.90)',
+        pillBorderWs: 'rgba(155, 143, 212, 0.30)',
+        pillBorderGesture: 'rgba(255, 90, 106, 0.40)',
+        pillText: '#B7BEDB',
+        sectionLabel: 'rgba(178, 168, 224, 0.90)',
+        progressTrack: 'rgba(255, 255, 255, 0.08)',
+        primaryText: '#F1F0F7',
+        secondaryText: 'rgba(241, 240, 247, 0.68)',
+        secondaryTextDim: 'rgba(241, 240, 247, 0.42)',
+        divider: 'rgba(255, 255, 255, 0.08)',
+        panelBaseBg: 'rgba(255, 255, 255, 0.04)',
+        panelOverlayBg: 'rgba(255, 255, 255, 0.03)',
+        panelOverlayBorder: 'rgba(255, 255, 255, 0.08)',
+        glowOuter: 'rgba(155, 143, 212, 0.10)',
+        glowMiddle: 'rgba(155, 143, 212, 0.14)',
+        backBtnBg: 'rgba(255, 255, 255, 0.06)',
+        backBtnBorder: 'rgba(255, 255, 255, 0.10)',
+        chevronColor: 'rgba(178, 168, 224, 0.85)',
+        ingredientSquareBg: 'rgba(255, 255, 255, 0.05)',
+        ingredientSquareBorder: 'rgba(255, 255, 255, 0.09)',
+        utensilDot: 'rgba(178, 168, 224, 0.65)',
+        utensilText: '#B7BEDB',
+        notesBg: 'rgba(255, 255, 255, 0.04)',
+        notesBorder: 'rgba(255, 255, 255, 0.08)',
+        notesText: 'rgba(241, 240, 247, 0.42)',
+        switcherBg: 'rgba(255, 255, 255, 0.06)',
+        switcherBorder: 'rgba(255, 255, 255, 0.14)',
+        switcherIcon: '#F1F0F7',
+        cancelBg: 'rgba(255, 90, 106, 0.12)',
+        cancelBorder: 'rgba(255, 90, 106, 0.40)',
+        cancelText: '#FF8FA3',
+    },
+};
+
+type Palette = typeof PALETTES.light;
+
+/** Sun/moon toggle button — click, or thumbs-up gesture, switches theme */
+function ThemeSwitcher({ theme, onToggle, palette }: { theme: ThemeMode; onToggle: () => void; palette: Palette }) {
+    return (
+        <button
+            onClick={onToggle}
+            aria-label="Toggle dark mode"
+            style={{
+                width: 41.60, height: 41.60,
+                background: palette.switcherBg,
+                borderRadius: 10,
+                border: `0.80px ${palette.switcherBorder} solid`,
+                cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0,
+                transition: 'background 0.18s ease, border-color 0.18s ease',
+            }}
+        >
+            {theme === 'dark' ? (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z" stroke={palette.switcherIcon} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+            ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="4.5" stroke={palette.switcherIcon} strokeWidth="2" />
+                    <path d="M12 2v2.5M12 19.5V22M4.22 4.22l1.77 1.77M18 18l1.77 1.77M2 12h2.5M19.5 12H22M4.22 19.78l1.77-1.77M18 6l1.77-1.77" stroke={palette.switcherIcon} strokeWidth="2" strokeLinecap="round" />
+                </svg>
+            )}
+        </button>
+    );
+}
+
+function formatStopwatch(totalSeconds: number): string {
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
 interface TimerRingProps {
-    index: number;
-    label: string;
     value: string;
     progress: number;
     alert?: boolean;
+    valueColor: string;
+    controls?: React.ReactNode;
 }
 
-function TimerRing({ index, label, value, progress, alert = false }: TimerRingProps) {
+function TimerRing({ value, progress, alert = false, valueColor, controls }: TimerRingProps) {
     const ringColor = alert ? '#FF3D5A' : '#6B5EB8';
-    const indexColor = alert ? '#FF3D5A' : '#5B7CBC';
-    const labelColor = alert ? '#FF8FAB' : '#5B7CBC';
     const totalLength = 427.26;
     const dash = (progress / 100) * totalLength;
 
     const ringContent = (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            {/* Index label */}
-            <div style={{
-                color: indexColor,
-                fontSize: 13,
-                fontFamily: 'Inter, sans-serif',
-                fontWeight: 700,
-                lineHeight: '19.50px',
-                marginBottom: 2,
-                alignSelf: 'center',
-            }}>({index})</div>
-
             {/* SVG Ring */}
             <div style={{ position: 'relative', width: 168, height: 168 }}>
                 <svg
@@ -79,32 +180,18 @@ function TimerRing({ index, label, value, progress, alert = false }: TimerRingPr
                         stroke={ringColor}
                         strokeLinecap="round"
                         strokeWidth="9"
-                        initial={{ strokeDasharray: `0 ${totalLength}` }}
                         animate={{ strokeDasharray: `${dash} ${totalLength}` }}
-                        transition={{ duration: 0.8, ease: 'easeOut' }}
+                        transition={{ duration: 0.35, ease: 'linear' }}
                     />
                 </svg>
 
                 {/* Center text */}
                 <div style={{
                     position: 'absolute', inset: 0,
-                    display: 'flex', flexDirection: 'column',
-                    alignItems: 'center', justifyContent: 'center',
-                    gap: 2,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>
                     <div style={{
-                        color: labelColor,
-                        fontSize: 10,
-                        fontFamily: 'Inter, sans-serif',
-                        fontWeight: 700,
-                        textTransform: 'uppercase',
-                        lineHeight: '12.50px',
-                        letterSpacing: 1.50,
-                        textAlign: 'center',
-                        padding: '0 12px',
-                    }}>{label}</div>
-                    <div style={{
-                        color: '#1E1B3A',
+                        color: valueColor,
                         fontSize: 26,
                         fontFamily: 'Inter, sans-serif',
                         fontWeight: 700,
@@ -113,6 +200,8 @@ function TimerRing({ index, label, value, progress, alert = false }: TimerRingPr
                     }}>{value}</div>
                 </div>
             </div>
+
+            {controls && <div style={{ marginTop: 10 }}>{controls}</div>}
         </div>
     );
 
@@ -135,37 +224,45 @@ function TimerRing({ index, label, value, progress, alert = false }: TimerRingPr
     return ringContent;
 }
 
-/* ─── Panel shared styles ─────────────────────────────────────────── */
-const PANEL_BASE: React.CSSProperties = {
-    position: 'relative',
-    background: 'rgba(60, 55, 100, 0.04)',
-    borderRadius: 24,
-    overflow: 'hidden',
-    flexShrink: 0,
-};
+/* ─── Panel shared styles (theme-dependent) ──────────────────────── */
+function panelBase(palette: Palette): React.CSSProperties {
+    return {
+        position: 'relative',
+        background: palette.panelBaseBg,
+        borderRadius: 24,
+        overflow: 'hidden',
+        flexShrink: 0,
+    };
+}
 
-const PANEL_OVERLAY: React.CSSProperties = {
-    position: 'absolute',
-    inset: 0,
-    background: 'rgba(40, 38, 72, 0.08)',
-    borderRadius: 24,
-    border: '0.80px rgba(40, 38, 72, 0.10) solid',
-    pointerEvents: 'none',
-};
+function panelOverlay(palette: Palette): React.CSSProperties {
+    return {
+        position: 'absolute',
+        inset: 0,
+        background: palette.panelOverlayBg,
+        borderRadius: 24,
+        border: `0.80px ${palette.panelOverlayBorder} solid`,
+        pointerEvents: 'none',
+    };
+}
 
-const SECTION_LABEL: React.CSSProperties = {
-    color: 'rgba(107, 94, 184, 0.85)',
-    fontSize: 12,
-    fontFamily: 'Inter, sans-serif',
-    fontWeight: 400,
-    lineHeight: '18px',
-    letterSpacing: 3.60,
-};
+function sectionLabelStyle(palette: Palette): React.CSSProperties {
+    return {
+        color: palette.sectionLabel,
+        fontSize: 12,
+        fontFamily: 'Inter, sans-serif',
+        fontWeight: 400,
+        lineHeight: '18px',
+        letterSpacing: 3.60,
+    };
+}
 
-const DIVIDER: React.CSSProperties = {
-    height: 1,
-    background: 'rgba(40, 38, 72, 0.08)',
-};
+function dividerStyle(palette: Palette): React.CSSProperties {
+    return {
+        height: 1,
+        background: palette.divider,
+    };
+}
 
 /* ─── Main component ─────────────────────────────────────────────── */
 export const RecipeHud: React.FC<RecipeHudProps> = ({
@@ -176,16 +273,53 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
     progressPercent,
     onNextStep,
     onPreviousStep,
+    onOpenMenu,
     isConnected,
     lastAction,
+    theme,
+    onToggleTheme,
 }) => {
-    const currentStep = recipe.instructions[stepNumber - 1];
-    const timer1Value = formatClock(currentStep?.timer_minutes, '01:28');
-    const timer2Value = formatClock(recipe.prep_time_minutes, '04:15');
-    const timer1Label = recipe.title.toUpperCase().split(' ').slice(0, 2).join(' ');
-    const timer2Label = (recipe.ingredients[1]?.name ?? 'PREP TIMER').toUpperCase();
-    const timer1Progress = Math.min(95, 35 + (stepNumber - 1) * 12);
-    const timer2Progress = 75;
+    const palette = PALETTES[theme];
+    const PANEL_BASE = panelBase(palette);
+    const PANEL_OVERLAY = panelOverlay(palette);
+    const SECTION_LABEL = sectionLabelStyle(palette);
+    const DIVIDER = dividerStyle(palette);
+
+    /* ── Timer 1: ad-hoc task timer (dough rising, frying, ...) ──────
+     * Manual stopwatch — user starts/stops/resets it. The ring loops
+     * once a minute purely to show it's alive; there's no fixed target.
+     */
+    const [taskSeconds, setTaskSeconds] = useState(0);
+    const [taskRunning, setTaskRunning] = useState(false);
+
+    useEffect(() => {
+        if (!taskRunning) return;
+        const id = setInterval(() => setTaskSeconds(s => s + 1), 1000);
+        return () => clearInterval(id);
+    }, [taskRunning]);
+
+    const toggleTask = useCallback(() => setTaskRunning(running => !running), []);
+    const resetTask = useCallback(() => {
+        setTaskRunning(false);
+        setTaskSeconds(0);
+    }, []);
+
+    /* ── Timer 2: overall cooking time — starts the moment Session 3
+     * mounts, runs for as long as the user is cooking, no controls.
+     */
+    const [cookSeconds, setCookSeconds] = useState(0);
+
+    useEffect(() => {
+        const id = setInterval(() => setCookSeconds(s => s + 1), 1000);
+        return () => clearInterval(id);
+    }, []);
+
+    const taskValue = formatStopwatch(taskSeconds);
+    const cookValue = formatStopwatch(cookSeconds);
+    const taskProgress = ((taskSeconds % 60) / 60) * 100;
+    const cookProgress = recipe.cook_time_minutes
+        ? Math.min(100, (cookSeconds / 60 / recipe.cook_time_minutes) * 100)
+        : ((cookSeconds % 300) / 300) * 100;
 
     const gestureText = lastAction && lastAction !== 'NO_ACTION'
         ? `LAST GESTURE: ${lastAction.replace(/_/g, ' ')}`
@@ -204,7 +338,7 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
             <div style={{
                 width: '100%',
                 height: '100%',
-                background: '#F5F4F0',
+                background: palette.cardBg,
                 borderRadius: 36,
                 display: 'flex',
                 flexDirection: 'column',
@@ -217,7 +351,7 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                     position: 'absolute',
                     inset: 0,
                     borderRadius: 36,
-                    border: '0.80px rgba(107, 94, 184, 0.20) solid',
+                    border: `0.80px ${palette.cardBorderOverlay} solid`,
                     pointerEvents: 'none',
                     zIndex: 10,
                 }} />
@@ -238,13 +372,14 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
+                        gap: 10,
                     }}>
                         {/* WEBSOCKET CONNECTED pill */}
                         <div style={{
-                            background: 'rgba(245, 244, 240, 0.95)',
+                            background: palette.pillBg,
                             boxShadow: '0px 2px 12px rgba(100, 90, 170, 0.12)',
                             borderRadius: 10,
-                            border: '0.80px rgba(107, 94, 184, 0.30) solid',
+                            border: `0.80px ${palette.pillBorderWs} solid`,
                             paddingTop: 8.80,
                             paddingBottom: 8.80,
                             paddingLeft: 12.80,
@@ -260,7 +395,7 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                                 borderRadius: '50%',
                             }} />
                             <span style={{
-                                color: '#6B7080',
+                                color: palette.pillText,
                                 fontSize: 11,
                                 fontFamily: 'Inter, sans-serif',
                                 fontWeight: 700,
@@ -273,10 +408,10 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
 
                         {/* LAST GESTURE pill */}
                         <div style={{
-                            background: 'rgba(245, 244, 240, 0.95)',
+                            background: palette.pillBg,
                             boxShadow: '0px 2px 12px rgba(100, 90, 170, 0.12)',
                             borderRadius: 10,
-                            border: '0.80px rgba(255, 61, 90, 0.34) solid',
+                            border: `0.80px ${palette.pillBorderGesture} solid`,
                             paddingTop: 12.55,
                             paddingBottom: 12.55,
                             paddingLeft: 12.80,
@@ -285,16 +420,49 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                             alignItems: 'center',
                             height: 41.60,
                             boxSizing: 'border-box',
+                            flex: 1, minWidth: 0,
                         }}>
                             <span style={{
-                                color: '#6B7080',
+                                color: palette.pillText,
                                 fontSize: 11,
                                 fontFamily: 'Inter, sans-serif',
                                 fontWeight: 700,
                                 lineHeight: '16.50px',
                                 letterSpacing: 1.10,
+                                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                             }}>{gestureText}</span>
                         </div>
+
+                        {/* Theme switcher */}
+                        <ThemeSwitcher theme={theme} onToggle={onToggleTheme} palette={palette} />
+
+                        {/* Cancel — back to Session 1 recipe menu */}
+                        <button
+                            onClick={onOpenMenu}
+                            aria-label="Cancel and return to recipe menu"
+                            style={{
+                                height: 41.60, paddingLeft: 14, paddingRight: 16,
+                                background: palette.cancelBg,
+                                borderRadius: 10,
+                                border: `0.80px ${palette.cancelBorder} solid`,
+                                cursor: 'pointer',
+                                display: 'flex', alignItems: 'center', gap: 6,
+                                flexShrink: 0,
+                                transition: 'background 0.18s ease, border-color 0.18s ease',
+                            }}
+                        >
+                            <X size={14} color={palette.cancelText} strokeWidth={2.2} />
+                            <span style={{
+                                color: palette.cancelText,
+                                fontSize: 11,
+                                fontFamily: 'Inter, sans-serif',
+                                fontWeight: 700,
+                                textTransform: 'uppercase',
+                                lineHeight: '16.50px',
+                                letterSpacing: 1.10,
+                                whiteSpace: 'nowrap',
+                            }}>CANCEL</span>
+                        </button>
                     </div>
 
                     {/* Row 2: Progress bar */}
@@ -309,7 +477,7 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                             flex: 1,
                             height: 8,
                             minWidth: 1,
-                            background: 'rgba(60, 55, 100, 0.07)',
+                            background: palette.progressTrack,
                             borderRadius: 999,
                             overflow: 'hidden',
                         }}>
@@ -326,7 +494,7 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                         </div>
 
                         <span style={{
-                            color: 'rgba(107, 94, 184, 0.85)',
+                            color: palette.sectionLabel,
                             fontSize: 12,
                             fontFamily: 'Inter, sans-serif',
                             fontWeight: 400,
@@ -361,18 +529,48 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                             <div style={SECTION_LABEL}>TIMERS</div>
 
                             <TimerRing
-                                index={1}
-                                label={timer1Label}
-                                value={timer1Value}
-                                progress={timer1Progress}
+                                value={taskValue}
+                                progress={taskProgress}
+                                valueColor={palette.primaryText}
+                                alert={taskRunning}
+                                controls={
+                                    <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                                        <button
+                                            onClick={toggleTask}
+                                            aria-label={taskRunning ? 'Pause task timer' : 'Start task timer'}
+                                            style={{
+                                                width: 34, height: 34, borderRadius: '50%',
+                                                background: taskRunning ? '#FF3D5A' : '#6B5EB8',
+                                                border: 'none', cursor: 'pointer',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                transition: 'background 0.2s ease',
+                                            }}
+                                        >
+                                            {taskRunning
+                                                ? <Pause size={14} color="white" fill="white" />
+                                                : <Play size={14} color="white" fill="white" />}
+                                        </button>
+                                        <button
+                                            onClick={resetTask}
+                                            aria-label="Reset task timer"
+                                            style={{
+                                                width: 34, height: 34, borderRadius: '50%',
+                                                background: palette.backBtnBg,
+                                                border: `0.80px ${palette.backBtnBorder} solid`,
+                                                cursor: 'pointer',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            }}
+                                        >
+                                            <RotateCcw size={14} color={palette.chevronColor} />
+                                        </button>
+                                    </div>
+                                }
                             />
 
                             <TimerRing
-                                index={2}
-                                label={timer2Label}
-                                value={timer2Value}
-                                progress={timer2Progress}
-                                alert
+                                value={cookValue}
+                                progress={cookProgress}
+                                valueColor={palette.primaryText}
                             />
                         </div>
                         <div style={PANEL_OVERLAY} />
@@ -400,7 +598,7 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                                 RECIPE
                             </div>
                             <div style={{
-                                color: '#1E1B3A',
+                                color: palette.primaryText,
                                 fontSize: 22,
                                 fontFamily: 'Inter, sans-serif',
                                 fontWeight: 500,
@@ -414,7 +612,7 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                                 STEP {stepNumber}
                             </div>
                             <div style={{
-                                color: 'rgba(30, 27, 58, 0.65)',
+                                color: palette.secondaryText,
                                 fontSize: 15,
                                 fontFamily: 'Inter, sans-serif',
                                 fontWeight: 400,
@@ -442,7 +640,7 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                                 position: 'absolute',
                                 width: 340,
                                 height: 340,
-                                background: 'rgba(107, 94, 184, 0.06)',
+                                background: palette.glowOuter,
                                 borderRadius: '50%',
                                 filter: 'blur(60px)',
                             }} />
@@ -451,7 +649,7 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                                 position: 'absolute',
                                 width: 284,
                                 height: 284,
-                                background: 'rgba(107, 94, 184, 0.10)',
+                                background: palette.glowMiddle,
                                 borderRadius: '50%',
                                 filter: 'blur(30px)',
                             }} />
@@ -516,9 +714,9 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                                 onClick={onPreviousStep}
                                 disabled={stepNumber === 1}
                                 style={{
-                                    background: 'rgba(40, 38, 72, 0.08)',
+                                    background: palette.backBtnBg,
                                     borderRadius: 999,
-                                    border: '0.80px rgba(40, 38, 72, 0.10) solid',
+                                    border: `0.80px ${palette.backBtnBorder} solid`,
                                     paddingTop: 10,
                                     paddingBottom: 10,
                                     paddingLeft: 16,
@@ -533,11 +731,11 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                             >
                                 <ChevronLeft
                                     size={16}
-                                    color="rgba(107, 94, 184, 0.70)"
+                                    color={palette.chevronColor}
                                     strokeWidth={1.8}
                                 />
                                 <span style={{
-                                    color: 'rgba(30, 27, 58, 0.65)',
+                                    color: palette.secondaryText,
                                     fontSize: 14,
                                     fontFamily: 'Inter, sans-serif',
                                     fontWeight: 500,
@@ -601,9 +799,9 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                                     {Array.from({ length: 9 }).map((_, i) => (
                                         <div key={i} style={{
                                             aspectRatio: '1',
-                                            background: 'rgba(40, 38, 72, 0.08)',
+                                            background: palette.ingredientSquareBg,
                                             borderRadius: 14,
-                                            border: '0.80px rgba(40, 38, 72, 0.10) solid',
+                                            border: `0.80px ${palette.ingredientSquareBorder} solid`,
                                         }} />
                                     ))}
                                 </div>
@@ -628,11 +826,11 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                                             width: 6,
                                             height: 6,
                                             borderRadius: '50%',
-                                            background: 'rgba(107, 94, 184, 0.55)',
+                                            background: palette.utensilDot,
                                             flexShrink: 0,
                                         }} />
                                         <span style={{
-                                            color: '#6B7080',
+                                            color: palette.utensilText,
                                             fontSize: 11,
                                             fontFamily: 'Inter, sans-serif',
                                             fontWeight: 400,
@@ -663,7 +861,7 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                                     marginBottom: 5,
                                 }}>
                                     <span style={{
-                                        color: '#1E1B3A',
+                                        color: palette.primaryText,
                                         fontSize: 11,
                                         fontFamily: 'Inter, sans-serif',
                                         fontWeight: 400,
@@ -679,14 +877,14 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                     <span style={{
-                                        color: '#1E1B3A',
+                                        color: palette.primaryText,
                                         fontSize: 11,
                                         fontFamily: 'Inter, sans-serif',
                                         fontWeight: 400,
                                         lineHeight: '16.50px',
                                     }}>Right Hand:</span>
                                     <span style={{
-                                        color: '#6B7080',
+                                        color: palette.utensilText,
                                         fontSize: 11,
                                         fontFamily: 'Inter, sans-serif',
                                         fontWeight: 400,
@@ -697,14 +895,14 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
 
                             {/* Notes box */}
                             <div style={{
-                                background: 'rgba(40, 38, 72, 0.08)',
+                                background: palette.notesBg,
                                 borderRadius: 14,
-                                border: '0.80px rgba(40, 38, 72, 0.10) solid',
+                                border: `0.80px ${palette.notesBorder} solid`,
                                 padding: '12.80px',
                                 marginTop: 'auto',
                             }}>
                                 <span style={{
-                                    color: 'rgba(30, 27, 58, 0.45)',
+                                    color: palette.notesText,
                                     fontSize: 12,
                                     fontFamily: 'Inter, sans-serif',
                                     fontWeight: 400,

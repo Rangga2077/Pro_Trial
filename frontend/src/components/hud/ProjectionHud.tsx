@@ -33,6 +33,8 @@ export const ProjectionHud: React.FC = () => {
                     lastAction={hud.lastAction}
                     onReady={hud.startCooking}
                     onBack={hud.openMenu}
+                    theme={hud.theme}
+                    onToggleTheme={hud.toggleTheme}
                 />
             )}
 
@@ -48,6 +50,8 @@ export const ProjectionHud: React.FC = () => {
                     onOpenMenu={hud.openMenu}
                     isConnected={hud.isConnected}
                     lastAction={hud.lastAction}
+                    theme={hud.theme}
+                    onToggleTheme={hud.toggleTheme}
                 />
             )}
 
