@@ -18,7 +18,17 @@ Thumbs.db
 # AGENTS
 AGENTS.md
 
-#Unused Repositories
+# Dataset & Training Runs
+data/
+runs/
+
+# Temporary / Scratch Files
+scrapper
+auto_label
+implementation_plan*
+pytest-cache-files-*/
+
+# Unused Repositories
 Changecirclecolor/
 Sessioningcheck/
 Userwelcomepagewithmenu/
