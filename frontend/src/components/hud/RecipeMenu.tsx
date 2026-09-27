@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { motion } from 'framer-motion';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useWebSocket } from '../../context/useWebSocket';
@@ -241,16 +241,14 @@ export const RecipeMenu: React.FC<RecipeMenuProps> = ({
     onPrevious,
 }) => {
     const { isConnected } = useWebSocket();
+    const [prevSelectedIndex, setPrevSelectedIndex] = useState(selectedIndex);
     const [activeIndex, setActiveIndex] = useState(selectedIndex);
-    const prevGestureIndex = useRef(selectedIndex);
 
-    /* Sync gesture-driven parent changes */
-    useEffect(() => {
-        if (prevGestureIndex.current !== selectedIndex) {
-            prevGestureIndex.current = selectedIndex;
-            setActiveIndex(selectedIndex);
-        }
-    }, [selectedIndex]);
+    /* Sync gesture-driven parent changes during render */
+    if (prevSelectedIndex !== selectedIndex) {
+        setPrevSelectedIndex(selectedIndex);
+        setActiveIndex(selectedIndex);
+    }
 
     const total = recipes.length;
 
