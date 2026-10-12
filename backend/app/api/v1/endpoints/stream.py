@@ -4,7 +4,15 @@ import json
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
 
-from app.schemas.contracts import LLMQueryMessage, LLMResponseData, LLMResponseMessage, StatusData, StatusMessage
+from app.engines.audio.pipeline import voice_pipeline
+from app.schemas.contracts import (
+    LLMQueryMessage,
+    LLMResponseData,
+    LLMResponseMessage,
+    StatusData,
+    StatusMessage,
+    UIModeMessage,
+)
 from app.services.realtime import realtime_service
 
 router = APIRouter()
@@ -15,6 +23,7 @@ async def websocket_endpoint(websocket: WebSocket):
     print("WS: Connection attempt...")
     await realtime_service.connect(websocket)
     print("WS: Client connected")
+    await websocket.send_json(voice_pipeline.status_message().model_dump(mode="json"))
 
     try:
         from app.engines.llm.router import llm_router
@@ -26,7 +35,12 @@ async def websocket_endpoint(websocket: WebSocket):
                 continue
 
             try:
-                message = LLMQueryMessage(**json.loads(data))
+                payload = json.loads(data)
+                if isinstance(payload, dict) and payload.get("type") == "ui_mode":
+                    # The HUD screen changed: voice phrases map per screen.
+                    voice_pipeline.interpreter.set_mode(UIModeMessage(**payload).mode)
+                    continue
+                message = LLMQueryMessage(**payload)
             except (json.JSONDecodeError, TypeError, ValidationError):
                 await websocket.send_json(
                     StatusMessage(data=StatusData(message="Invalid WebSocket message")).model_dump(mode="json")

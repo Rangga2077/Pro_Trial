@@ -29,7 +29,18 @@ class GestureAction(str, Enum):
     NEXT_STEP = "NEXT_STEP"
     PREVIOUS_STEP = "PREVIOUS_STEP"
     TOGGLE_THEME = "TOGGLE_THEME"
+    # Voice-only actions (never emitted by the gesture interpreter)
+    START_TIMER = "START_TIMER"
+    PAUSE_TIMER = "PAUSE_TIMER"
+    RESET_TIMER = "RESET_TIMER"
+    READ_STEP = "READ_STEP"
+    CONFIRM_READY = "CONFIRM_READY"
+    THEME_DARK = "THEME_DARK"
+    THEME_LIGHT = "THEME_LIGHT"
     NO_ACTION = "NO_ACTION"
+
+
+UIMode = Literal["menu", "ingredient_check", "cooking"]
 
 
 class CVUpdateData(BaseModel):
@@ -65,3 +76,33 @@ class StatusMessage(BaseModel):
 class LLMQueryMessage(BaseModel):
     type: Literal["llm_query"] = "llm_query"
     query: str
+
+
+class VoiceCommandData(BaseModel):
+    action: GestureAction
+    transcript: str
+    confidence: float
+
+
+class VoiceCommandMessage(BaseModel):
+    type: Literal["voice_command"] = "voice_command"
+    data: VoiceCommandData
+
+
+VoiceState = Literal["disabled", "listening", "error"]
+
+
+class VoiceStatusData(BaseModel):
+    state: VoiceState
+    message: Optional[str] = None
+
+
+class VoiceStatusMessage(BaseModel):
+    type: Literal["voice_status"] = "voice_status"
+    data: VoiceStatusData
+
+
+class UIModeMessage(BaseModel):
+    """Client → server: which HUD screen is showing, so voice phrases map per screen."""
+    type: Literal["ui_mode"] = "ui_mode"
+    mode: UIMode

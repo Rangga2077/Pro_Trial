@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { API_BASE_URL } from '../config';
 import { useWebSocket } from '../context/useWebSocket';
-import type { GestureAction, Recipe, ServerWebSocketMessage } from '../types/contracts';
+import type {
+    GestureAction,
+    Recipe,
+    ServerWebSocketMessage,
+    VoiceCommandMessage,
+    VoiceState,
+} from '../types/contracts';
+
+const RECIPE_RETRY_BASE_MS = 1000;
+const RECIPE_RETRY_MAX_MS = 5000;
 
 export type ProjectionHudMode = 'menu' | 'ingredient_check' | 'cooking';
 export type ThemeMode = 'light' | 'dark';
@@ -20,6 +29,9 @@ export interface ProjectionHudViewModel {
     currentInstruction: string | null;
     progressPercent: number;
     lastAction: GestureAction | null;
+    /** Most recent recognized voice command; screens react to the actions they own (timers, read step). */
+    voiceCommand: VoiceCommandMessage | null;
+    voiceState: VoiceState;
     isConnected: boolean;
     theme: ThemeMode;
     openMenu: () => void;
@@ -35,7 +47,7 @@ export interface ProjectionHudViewModel {
 }
 
 export function useProjectionHud(): ProjectionHudViewModel {
-    const { isConnected, lastMessage } = useWebSocket();
+    const { isConnected, lastMessage, lastVoiceCommand, voiceStatus, sendMessage } = useWebSocket();
     const [recipes, setRecipes] = useState<Recipe[]>([]);
     const [isLoadingRecipes, setIsLoadingRecipes] = useState(true);
     const [recipeError, setRecipeError] = useState<string | null>(null);
@@ -48,18 +60,20 @@ export function useProjectionHud(): ProjectionHudViewModel {
     const [theme, setTheme] = useState<ThemeMode>('light');
 
     const handledMessageRef = useRef<ServerWebSocketMessage | null>(null);
+    const handledVoiceRef = useRef<VoiceCommandMessage | null>(null);
 
     const lastAction = lastMessage?.type === 'cv_update'
         ? lastMessage.data.action
         : null;
 
+    // Load recipes, retrying until the backend answers: on a cold start the
+    // window can open before the backend has finished loading its models.
     useEffect(() => {
         let cancelled = false;
+        let retryTimer: number | undefined;
+        let retryDelay = RECIPE_RETRY_BASE_MS;
 
         async function loadRecipes() {
-            setIsLoadingRecipes(true);
-            setRecipeError(null);
-
             try {
                 const response = await fetch(`${API_BASE_URL}/api/v1/recipes/`);
 
@@ -73,12 +87,17 @@ export function useProjectionHud(): ProjectionHudViewModel {
                 if (cancelled) return;
 
                 setRecipes(nextRecipes);
+                setRecipeError(null);
                 setSelectedRecipeIndex(index =>
                     nextRecipes.length === 0 ? 0 : Math.min(index, nextRecipes.length - 1)
                 );
             } catch (error) {
                 if (cancelled) return;
-                setRecipeError(error instanceof Error ? error.message : 'Failed to load recipes');
+                const reason = error instanceof Error ? error.message : 'Failed to load recipes';
+                console.warn(`Recipe load failed (${reason}); retrying in ${retryDelay} ms`);
+                setRecipeError(`Waiting for the backend at ${API_BASE_URL} (${reason}). Retrying…`);
+                retryTimer = window.setTimeout(loadRecipes, retryDelay);
+                retryDelay = Math.min(retryDelay * 1.5, RECIPE_RETRY_MAX_MS);
             } finally {
                 if (!cancelled) {
                     setIsLoadingRecipes(false);
@@ -90,6 +109,7 @@ export function useProjectionHud(): ProjectionHudViewModel {
 
         return () => {
             cancelled = true;
+            window.clearTimeout(retryTimer);
         };
     }, []);
 
@@ -200,6 +220,12 @@ export function useProjectionHud(): ProjectionHudViewModel {
             return;
         }
 
+        // Voice "black" / "white" set the theme explicitly (the menu has no theme).
+        if (action === 'THEME_DARK' || action === 'THEME_LIGHT') {
+            if (!isMenuOpen) setTheme(action === 'THEME_DARK' ? 'dark' : 'light');
+            return;
+        }
+
         // Only advance cooking steps when actually in cooking mode
         if (!currentRecipe || isMenuOpen || isIngredientCheck) return;
 
@@ -235,6 +261,23 @@ export function useProjectionHud(): ProjectionHudViewModel {
         handleAction(lastMessage.data.action);
     }, [handleAction, lastMessage]);
 
+    // Voice commands share the gesture action handler. The backend already
+    // mapped the phrase for the current screen (see the ui_mode effect below).
+    useEffect(() => {
+        if (!lastVoiceCommand || handledVoiceRef.current === lastVoiceCommand) return;
+        handledVoiceRef.current = lastVoiceCommand;
+
+        // Don't let the read-aloud step trigger commands through the mic.
+        if (window.speechSynthesis?.speaking) return;
+
+        const { action } = lastVoiceCommand.data;
+        if (action === 'CONFIRM_READY') {
+            if (!isMenuOpen && isIngredientCheck) startCooking();
+            return;
+        }
+        handleAction(action);
+    }, [handleAction, isIngredientCheck, isMenuOpen, lastVoiceCommand, startCooking]);
+
     const selectedRecipe = recipes[selectedRecipeIndex] ?? null;
     const totalSteps = currentRecipe?.instructions.length ?? 0;
     const currentStepNumber = currentRecipe ? currentStepIndex + 1 : 0;
@@ -246,6 +289,12 @@ export function useProjectionHud(): ProjectionHudViewModel {
         if (isIngredientCheck) return 'ingredient_check';
         return 'cooking';
     }, [isIngredientCheck, isMenuOpen]);
+
+    // Tell the backend which screen is showing (and again after reconnects)
+    // so "next" means next recipe on the menu but next step while cooking.
+    useEffect(() => {
+        if (isConnected) sendMessage({ type: 'ui_mode', mode });
+    }, [isConnected, mode, sendMessage]);
 
     return {
         mode,
@@ -261,6 +310,8 @@ export function useProjectionHud(): ProjectionHudViewModel {
         currentInstruction,
         progressPercent,
         lastAction,
+        voiceCommand: lastVoiceCommand,
+        voiceState: voiceStatus.state,
         isConnected,
         theme,
         toggleTheme,

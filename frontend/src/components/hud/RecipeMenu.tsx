@@ -3,7 +3,9 @@ import { motion } from 'framer-motion';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useWebSocket } from '../../context/useWebSocket';
 import { API_BASE_URL } from '../../config';
-import type { Recipe } from '../../types/contracts';
+import type { Recipe, VoiceCommandMessage, VoiceState } from '../../types/contracts';
+import { sharedLayoutIds } from './screenTransitions';
+import { VoiceStatusIndicator } from './VoiceStatusIndicator';
 
 export interface RecipeMenuProps {
     recipes: Recipe[];
@@ -14,6 +16,8 @@ export interface RecipeMenuProps {
     onNext: () => void;
     onPrevious: () => void;
     onClose: () => void;
+    voiceState: VoiceState;
+    voiceCommand: VoiceCommandMessage | null;
 }
 
 /* ── Constants ──────────────────────────────────────────────────────── */
@@ -97,7 +101,8 @@ const CarouselCard: React.FC<CarouselCardProps> = ({
                 marginLeft: -CARD_W / 2,
                 marginTop: -CARD_H / 2,
                 borderRadius: 20,
-                overflow: 'hidden',
+                // No overflow clipping here: the shared surface must be able to
+                // animate in from full screen when returning from Ingredient Check.
                 cursor: isCenter ? 'default' : 'pointer',
             }}
             animate={{
@@ -110,20 +115,26 @@ const CarouselCard: React.FC<CarouselCardProps> = ({
             onClick={() => { if (!isCenter) onFocus(); }}
             whileHover={!isCenter ? { scale: t.scale * 1.04 } : undefined}
         >
-            {/* Background: image or colour gradient */}
-            {imageUrl ? (
-                <img
-                    src={imageUrl}
-                    alt={recipe.title}
-                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 30%' }}
-                />
-            ) : (
-                <div style={{ position: 'absolute', inset: 0, background: CARD_GRADIENTS[colorIndex % CARD_GRADIENTS.length] }} />
-            )}
+            {/* Background: image or colour gradient — shared surface that
+                morphs into the Ingredient Check card */}
+            <motion.div
+                layoutId={sharedLayoutIds.surface(recipe.id)}
+                style={{ position: 'absolute', inset: 0, borderRadius: 20, overflow: 'hidden' }}
+            >
+                {imageUrl ? (
+                    <img
+                        src={imageUrl}
+                        alt={recipe.title}
+                        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 30%' }}
+                    />
+                ) : (
+                    <div style={{ position: 'absolute', inset: 0, background: CARD_GRADIENTS[colorIndex % CARD_GRADIENTS.length] }} />
+                )}
+            </motion.div>
 
             {/* Dark gradient overlay — heavier at bottom for text */}
             <div style={{
-                position: 'absolute', inset: 0,
+                position: 'absolute', inset: 0, borderRadius: 20,
                 background: isCenter
                     ? 'linear-gradient(to top, rgba(0,0,0,0.90) 0%, rgba(0,0,0,0.55) 38%, rgba(0,0,0,0.18) 65%, transparent 100%)'
                     : 'linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.30) 55%, transparent 100%)',
@@ -166,7 +177,13 @@ const CarouselCard: React.FC<CarouselCardProps> = ({
                         fontWeight: 700, textTransform: 'uppercase',
                         lineHeight: 1.15, letterSpacing: '0.04em',
                     }}>
-                        {recipe.title}
+                        <motion.span
+                            layoutId={sharedLayoutIds.title(recipe.id)}
+                            layout="position"
+                            style={{ display: 'inline-block' }}
+                        >
+                            {recipe.title}
+                        </motion.span>
                     </h2>
 
                     {/* Description */}
@@ -239,6 +256,8 @@ export const RecipeMenu: React.FC<RecipeMenuProps> = ({
     onSelect,
     onNext,
     onPrevious,
+    voiceState,
+    voiceCommand,
 }) => {
     const { isConnected } = useWebSocket();
     const [prevSelectedIndex, setPrevSelectedIndex] = useState(selectedIndex);
@@ -327,31 +346,42 @@ export const RecipeMenu: React.FC<RecipeMenuProps> = ({
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 padding: '0 28px', zIndex: 30, pointerEvents: 'none',
             }}>
-                {/* WebSocket status chip */}
-                <div style={{
-                    pointerEvents: 'auto',
-                    display: 'inline-flex', alignItems: 'center', gap: 8,
-                    padding: '7px 14px',
-                    background: 'rgba(255,255,255,0.05)',
-                    border: '0.8px solid rgba(255,255,255,0.10)',
-                    borderRadius: 10, backdropFilter: 'blur(12px)',
-                }}>
-                    <motion.div
-                        style={{
-                            width: 7, height: 7, borderRadius: '50%',
-                            background: isConnected ? '#4DFFB3' : '#FF5A6A',
-                            boxShadow: `0 0 6px ${isConnected ? '#4DFFB3' : '#FF5A6A'}`,
-                        }}
-                        animate={{ opacity: [1, 0.45, 1] }}
-                        transition={{ duration: 1.5, repeat: Infinity }}
-                    />
-                    <span style={{
-                        color: 'rgba(255,255,255,0.50)', fontSize: 10,
-                        fontFamily: 'Inter, sans-serif', fontWeight: 700,
-                        textTransform: 'uppercase', letterSpacing: 1.2,
+                {/* Connection + voice status */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {/* WebSocket status chip */}
+                    <div style={{
+                        pointerEvents: 'auto',
+                        display: 'inline-flex', alignItems: 'center', gap: 8,
+                        padding: '7px 14px',
+                        background: 'rgba(255,255,255,0.05)',
+                        border: '0.8px solid rgba(255,255,255,0.10)',
+                        borderRadius: 10, backdropFilter: 'blur(12px)',
                     }}>
-                        {isConnected ? 'CONNECTED' : 'DISCONNECTED'}
-                    </span>
+                        <motion.div
+                            style={{
+                                width: 7, height: 7, borderRadius: '50%',
+                                background: isConnected ? '#4DFFB3' : '#FF5A6A',
+                                boxShadow: `0 0 6px ${isConnected ? '#4DFFB3' : '#FF5A6A'}`,
+                            }}
+                            animate={{ opacity: [1, 0.45, 1] }}
+                            transition={{ duration: 1.5, repeat: Infinity }}
+                        />
+                        <span style={{
+                            color: 'rgba(255,255,255,0.50)', fontSize: 10,
+                            fontFamily: 'Inter, sans-serif', fontWeight: 700,
+                            textTransform: 'uppercase', letterSpacing: 1.2,
+                        }}>
+                            {isConnected ? 'CONNECTED' : 'DISCONNECTED'}
+                        </span>
+                    </div>
+
+                    {/* Voice mic status — say "next", "back", "okay" */}
+                    <VoiceStatusIndicator
+                        state={voiceState}
+                        command={voiceCommand}
+                        height={30}
+                        colors={{ bg: 'rgba(255,255,255,0.05)', border: 'rgba(255,255,255,0.10)', text: 'rgba(255,255,255,0.50)', accent: '#B79CF5' }}
+                    />
                 </div>
 
                 {/* Index counter */}

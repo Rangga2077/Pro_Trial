@@ -19,7 +19,18 @@ async def lifespan(app: FastAPI):
         cv_pipeline = active_pipeline
         task = asyncio.create_task(cv_pipeline.start())
 
+    voice_pipeline = None
+    voice_task = None
+    if settings.VOICE_ENABLED:
+        from app.engines.audio.pipeline import voice_pipeline
+
+        voice_task = asyncio.create_task(voice_pipeline.start())
+
     yield
+
+    if voice_pipeline and voice_task:
+        voice_pipeline.stop()
+        await voice_task
 
     if cv_pipeline and task:
         cv_pipeline.stop()

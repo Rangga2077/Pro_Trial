@@ -12,8 +12,21 @@ echo.
 echo Starting Backend Server...
 start "%BACKEND_TITLE%" /D "%ROOT%backend" cmd /c "title %BACKEND_TITLE% && call venv\Scripts\activate.bat && python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
 
-echo Waiting for backend to initialize...
-timeout /t 10 /nobreak >nul
+echo Waiting for backend to answer on port 8000 (up to 90 s; first start loads YOLO, MediaPipe and Vosk)...
+set /a WAITED=0
+:WaitBackend
+curl.exe -s -o nul -m 2 http://127.0.0.1:8000/ && (
+    echo Backend is up.
+    goto BackendReady
+)
+set /a WAITED+=1
+if %WAITED% GEQ 90 (
+    echo Backend did not answer after 90 s - starting the frontend anyway; it keeps retrying.
+    goto BackendReady
+)
+timeout /t 1 /nobreak >nul
+goto WaitBackend
+:BackendReady
 
 echo Starting Frontend and Electron...
 start "%FRONTEND_TITLE%" /D "%ROOT%frontend" cmd /c "title %FRONTEND_TITLE% && npm run electron:dev"

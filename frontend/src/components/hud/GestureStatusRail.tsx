@@ -5,6 +5,8 @@ import type { ProjectionHudMode } from '../../hooks/useProjectionHud';
 export interface GestureStatusRailProps {
     mode: ProjectionHudMode;
     lastAction: GestureAction | null;
+    /** Show the voice phrases for this screen (the mic is listening). */
+    voiceListening?: boolean;
 }
 
 const gestureHints: Record<ProjectionHudMode, { gesture: string; action: string }[]> = {
@@ -26,8 +28,14 @@ const gestureHints: Record<ProjectionHudMode, { gesture: string; action: string 
     ],
 };
 
-export const GestureStatusRail: React.FC<GestureStatusRailProps> = ({ mode, lastAction }) => {
+/** Voice phrases per screen; the backend maps them per screen (ui_mode). */
+const voiceHints: Partial<Record<ProjectionHudMode, string>> = {
+    menu: '“next” · “back” · “okay”',
+};
+
+export const GestureStatusRail: React.FC<GestureStatusRailProps> = ({ mode, lastAction, voiceListening = false }) => {
     const hints = gestureHints[mode];
+    const voiceHint = voiceListening ? voiceHints[mode] : undefined;
 
     return (
         <div className="fixed bottom-4 left-4 z-20">
@@ -50,6 +58,20 @@ export const GestureStatusRail: React.FC<GestureStatusRailProps> = ({ mode, last
                         <span className="text-slate-300">{hint.action}</span>
                     </motion.div>
                 ))}
+
+                {voiceHint && (
+                    <motion.div
+                        key={`${mode}-voice`}
+                        className="px-3 py-2 bg-slate-950/80 border border-purple-300/30 rounded-lg text-xs font-mono text-purple-200 backdrop-blur"
+                        initial={{ opacity: 0, x: -8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: hints.length * 0.05 }}
+                    >
+                        <span className="text-purple-300">Say</span>
+                        <span className="text-slate-400 mx-2">→</span>
+                        <span className="text-slate-300">{voiceHint}</span>
+                    </motion.div>
+                )}
 
                 <AnimatePresence>
                     {lastAction && lastAction !== 'NO_ACTION' && (

@@ -2,10 +2,35 @@ import React, { useEffect, useState } from 'react';
 import { MonitorCog, X } from 'lucide-react';
 import type { ElectronDisplay } from '../types/electron';
 
+/** The floating trigger fades out after this long without pointer movement. */
+const TRIGGER_IDLE_MS = 3000;
+
 export const DisplaySettings: React.FC = () => {
     const [displays, setDisplays] = useState<ElectronDisplay[]>([]);
     const [isOpen, setIsOpen] = useState(false);
     const [error, setError] = useState<string>('');
+    const [isPointerActive, setIsPointerActive] = useState(true);
+    const [isTriggerHovered, setIsTriggerHovered] = useState(false);
+    const [isTriggerFocused, setIsTriggerFocused] = useState(false);
+
+    // Keep the trigger off projected content unless the operator moves the mouse.
+    useEffect(() => {
+        let timer = window.setTimeout(() => setIsPointerActive(false), TRIGGER_IDLE_MS);
+        const wake = () => {
+            setIsPointerActive(true);
+            window.clearTimeout(timer);
+            timer = window.setTimeout(() => setIsPointerActive(false), TRIGGER_IDLE_MS);
+        };
+        window.addEventListener('pointermove', wake);
+        window.addEventListener('pointerdown', wake);
+        return () => {
+            window.clearTimeout(timer);
+            window.removeEventListener('pointermove', wake);
+            window.removeEventListener('pointerdown', wake);
+        };
+    }, []);
+
+    const isTriggerVisible = isPointerActive || isTriggerHovered || isTriggerFocused;
 
     useEffect(() => {
         if (!isOpen || !window.electronAPI) return;
@@ -76,7 +101,12 @@ export const DisplaySettings: React.FC = () => {
             ) : (
                 <button
                     onClick={() => setIsOpen(true)}
-                    className="rounded-full border border-cyan-300/25 bg-[#0b1220]/80 p-3 text-cyan-100 shadow-lg backdrop-blur-md transition-all hover:scale-110 hover:bg-cyan-300/10"
+                    onPointerEnter={() => setIsTriggerHovered(true)}
+                    onPointerLeave={() => setIsTriggerHovered(false)}
+                    onFocus={() => setIsTriggerFocused(true)}
+                    onBlur={() => setIsTriggerFocused(false)}
+                    style={{ opacity: isTriggerVisible ? 1 : 0, pointerEvents: isTriggerVisible ? 'auto' : 'none' }}
+                    className="rounded-full border border-cyan-300/25 bg-[#0b1220]/80 p-3 text-cyan-100 shadow-lg backdrop-blur-md transition-all duration-300 hover:scale-110 hover:bg-cyan-300/10"
                     title="Projector Settings"
                     aria-label="Open projector settings"
                 >

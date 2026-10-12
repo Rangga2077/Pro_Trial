@@ -1,149 +1,172 @@
 /**
  * Screen transition variants for ProjectionHud mode switches.
  *
- * Each mode change (menu ↔ ingredient_check ↔ cooking) gets a distinct
- * enter/exit animation. The `custom` prop carries the TransitionDirection
- * so the same variant functions produce the right motion for every switch.
+ * The three sessions form a linear journey (Menu → Ingredient Check →
+ * Cooking). Forward moves go "deeper", back moves mirror them. Screens
+ * overlap during a switch (no blank frame), so each transition declares
+ * which screen sits on top.
  *
- * Shape‑morph transition (Ingredient Check → Cooking) uses 8‑point CSS
- * clip‑path polygons that share the same vertex count so the browser can
- * smoothly interpolate between them.
+ * Menu ↔ Ingredient Check also hands off a shared element (`layoutId`)
+ * between the selected recipe card and the ingredient card. The screen
+ * that *enters* with a shared element only fades — transforming its
+ * parent would offset the layout animation.
  */
 
-import type { Variants } from 'framer-motion';
+import type { TargetAndTransition, Variants } from 'framer-motion';
 import type { ProjectionHudMode } from '../../hooks/useProjectionHud';
 
-/* ── Direction types ────────────────────────────────────────────────── */
+/* ── Transition keys ────────────────────────────────────────────────── */
 
-export type TransitionDirection =
-  | 'menu-to-ingredient'
-  | 'ingredient-to-cooking'
-  | 'to-menu'
+export type TransitionKey =
+  | 'menu>ingredient_check'
+  | 'ingredient_check>cooking'
+  | 'ingredient_check>menu'
+  | 'cooking>menu'
+  | 'fallback'
   | 'initial';
 
-/**
- * Determine the visual transition direction from a previous mode to
- * the current one.  Returns `'initial'` on first mount (no animation).
- */
-export function getTransitionDirection(
-  prev: ProjectionHudMode | null,
-  current: ProjectionHudMode,
-): TransitionDirection {
-  if (prev === null || prev === current) return 'initial';
-  if (current === 'menu') return 'to-menu';
-  if (prev === 'menu' && current === 'ingredient_check') return 'menu-to-ingredient';
-  if (prev === 'ingredient_check' && current === 'cooking') return 'ingredient-to-cooking';
-  return 'to-menu'; // fallback — treat as "going back"
+export interface ScreenTransitionCustom {
+  key: TransitionKey;
+  reduced: boolean;
 }
 
-/* ── Shape‑morph clip‑paths ─────────────────────────────────────────
- * All polygons share exactly 8 vertices (midpoints added to rectangle
- * edges) so CSS can interpolate each coordinate pair smoothly.
- * ─────────────────────────────────────────────────────────────────── */
+/**
+ * Resolve the transition for a mode switch. Returns `'initial'` on first
+ * mount (no animation) and `'fallback'` for any unlisted pair.
+ */
+export function getTransitionKey(
+  prev: ProjectionHudMode | null,
+  current: ProjectionHudMode,
+): TransitionKey {
+  if (prev === null || prev === current) return 'initial';
+  if (prev === 'menu' && current === 'ingredient_check') return 'menu>ingredient_check';
+  if (prev === 'ingredient_check' && current === 'cooking') return 'ingredient_check>cooking';
+  if (prev === 'ingredient_check' && current === 'menu') return 'ingredient_check>menu';
+  if (prev === 'cooking' && current === 'menu') return 'cooking>menu';
+  return 'fallback';
+}
 
-/** Full‑screen rectangle with midpoints on each edge. */
-const RECT =
-  'polygon(0% 0%, 50% 0%, 100% 0%, 100% 50%, 100% 100%, 50% 100%, 0% 100%, 0% 50%)';
+/* ── Shared element ids ─────────────────────────────────────────────── */
 
-/** Diamond / rotated‑square — vertices pulled inward to 45° diagonals. */
-const DIAMOND =
-  'polygon(50% 2%, 76% 24%, 98% 50%, 76% 76%, 50% 98%, 24% 76%, 2% 50%, 24% 24%)';
+export const sharedLayoutIds = {
+  surface: (recipeId: string) => `recipe-surface-${recipeId}`,
+  title: (recipeId: string) => `recipe-title-${recipeId}`,
+};
 
-/** Near‑center collapsed point — tiny shape that effectively disappears. */
-const POINT =
-  'polygon(50% 46%, 54% 48%, 54% 50%, 52% 54%, 50% 54%, 46% 52%, 46% 50%, 48% 46%)';
+/* ── Timing ─────────────────────────────────────────────────────────── */
 
-/* ── Timing constants ───────────────────────────────────────────────── */
+type Bezier = [number, number, number, number];
 
-const EXIT_S = 0.2;   // 200 ms
-const ENTER_S = 0.2;  // 200 ms
-const MORPH_S = 0.25; // slightly longer for shape morph legibility
+const EASE_OUT: Bezier = [0, 0, 0.2, 1];
+const EASE_IN: Bezier = [0.4, 0, 1, 1];
+const EASE_IN_OUT: Bezier = [0.65, 0, 0.35, 1];
 
-const EASE_IN: [number, number, number, number] = [0.4, 0, 1, 1];
-const EASE_OUT: [number, number, number, number] = [0, 0, 0.2, 1];
-const EASE_IN_OUT: [number, number, number, number] = [0.4, 0, 0.2, 1];
+const FORWARD_S = 0.42;
+const WIPE_S = 0.5;
+const BACK_S = 0.36;
+const FADE_S = 0.25;
+const REDUCED_S = 0.15;
+
+/** Bottom edge collapsed → full screen; the reveal grows upward. */
+const WIPE_HIDDEN = 'inset(100% 0% 0% 0%)';
+const WIPE_SHOWN = 'inset(0% 0% 0% 0%)';
+
+const NEUTRAL_ACCENT = 'rgba(255, 255, 255, 0.3)';
+
+/* ── Transition table ───────────────────────────────────────────────── */
+
+interface TransitionSpec {
+  initial: TargetAndTransition;
+  animate: TargetAndTransition;
+  exit: TargetAndTransition;
+  /** Stacking for the entering screen. */
+  enterZ: number;
+  /** Stacking for the leaving screen. */
+  exitZ: number;
+  /** EdgePulse colour, or null for no pulse. */
+  accent: string | null;
+}
+
+const ENTER_ON_TOP = { enterZ: 2, exitZ: 1 };
+const EXIT_ON_TOP = { enterZ: 1, exitZ: 2 };
+
+const TRANSITIONS: Record<TransitionKey, TransitionSpec> = {
+  'menu>ingredient_check': {
+    initial: { opacity: 0 },
+    animate: { opacity: 1, transition: { duration: FORWARD_S, ease: EASE_OUT } },
+    exit: { opacity: 0, scale: 1.04, transition: { duration: FORWARD_S, ease: EASE_IN } },
+    ...ENTER_ON_TOP,
+    accent: 'rgba(2, 132, 199, 0.45)', // sky — ingredient check CTA
+  },
+  'ingredient_check>cooking': {
+    initial: { clipPath: WIPE_HIDDEN },
+    animate: { clipPath: WIPE_SHOWN, transition: { duration: WIPE_S, ease: EASE_IN_OUT } },
+    exit: { opacity: 0.5, y: -40, transition: { duration: WIPE_S, ease: EASE_IN_OUT } },
+    ...ENTER_ON_TOP,
+    accent: 'rgba(5, 150, 105, 0.45)', // emerald — "all checked"
+  },
+  'ingredient_check>menu': {
+    initial: { opacity: 0 },
+    animate: { opacity: 1, transition: { duration: BACK_S, ease: EASE_OUT } },
+    exit: { opacity: 0, x: '6%', transition: { duration: BACK_S, ease: EASE_IN } },
+    ...EXIT_ON_TOP,
+    accent: NEUTRAL_ACCENT,
+  },
+  'cooking>menu': {
+    initial: { opacity: 0 },
+    animate: { opacity: 1, transition: { duration: BACK_S, ease: EASE_OUT } },
+    exit: { opacity: 0, scale: 0.94, transition: { duration: BACK_S, ease: EASE_IN } },
+    ...EXIT_ON_TOP,
+    accent: NEUTRAL_ACCENT,
+  },
+  fallback: {
+    initial: { opacity: 0 },
+    animate: { opacity: 1, transition: { duration: FADE_S, ease: EASE_OUT } },
+    exit: { opacity: 0, transition: { duration: FADE_S, ease: EASE_IN } },
+    ...ENTER_ON_TOP,
+    accent: NEUTRAL_ACCENT,
+  },
+  initial: {
+    initial: { opacity: 0 },
+    animate: { opacity: 1, transition: { duration: FADE_S, ease: EASE_OUT } },
+    exit: { opacity: 0, transition: { duration: FADE_S, ease: EASE_IN } },
+    ...ENTER_ON_TOP,
+    accent: null,
+  },
+};
+
+const REDUCED: Pick<TransitionSpec, 'initial' | 'animate' | 'exit'> = {
+  initial: { opacity: 0 },
+  animate: { opacity: 1, transition: { duration: REDUCED_S } },
+  exit: { opacity: 0, transition: { duration: REDUCED_S } },
+};
+
+export function getTransitionAccent(key: TransitionKey): string | null {
+  return TRANSITIONS[key].accent;
+}
 
 /* ── Variants ───────────────────────────────────────────────────────── */
 
+/** Merge a target with an instant zIndex flip. */
+function withZIndex(target: TargetAndTransition, zIndex: number): TargetAndTransition {
+  return {
+    ...target,
+    zIndex,
+    transition: { ...target.transition, zIndex: { duration: 0 } },
+  };
+}
+
+function resolve(
+  { key, reduced }: ScreenTransitionCustom,
+  phase: 'initial' | 'animate' | 'exit',
+): TargetAndTransition {
+  const spec = TRANSITIONS[key];
+  const target = reduced ? REDUCED[phase] : spec[phase];
+  return withZIndex(target, phase === 'exit' ? spec.exitZ : spec.enterZ);
+}
+
 export const screenTransitionVariants: Variants = {
-  /**
-   * Initial state for the entering screen.  Determined by *how* we
-   * arrived (the direction of the transition).
-   */
-  initial: (dir: TransitionDirection) => {
-    switch (dir) {
-      case 'menu-to-ingredient':
-        return { opacity: 0, y: 60 };
-      case 'ingredient-to-cooking':
-        return { opacity: 0, clipPath: POINT };
-      case 'to-menu':
-        return { opacity: 0, scale: 0.95 };
-      default:
-        return { opacity: 0 };
-    }
-  },
-
-  /**
-   * Resting / visible state.  Shape‑morph uses keyframe arrays so the
-   * clip‑path walks through intermediate shapes.
-   */
-  animate: (dir: TransitionDirection) => {
-    switch (dir) {
-      case 'menu-to-ingredient':
-        return {
-          opacity: 1,
-          y: 0,
-          transition: { duration: ENTER_S, ease: EASE_OUT },
-        };
-      case 'ingredient-to-cooking':
-        return {
-          opacity: [0, 1, 1],
-          clipPath: [POINT, DIAMOND, RECT],
-          transition: { duration: MORPH_S, ease: EASE_IN_OUT, times: [0, 0.45, 1] },
-        };
-      case 'to-menu':
-        return {
-          opacity: 1,
-          scale: 1,
-          transition: { duration: ENTER_S, ease: EASE_OUT },
-        };
-      default:
-        return {
-          opacity: 1,
-          transition: { duration: ENTER_S, ease: EASE_OUT },
-        };
-    }
-  },
-
-  /**
-   * Exit state for the leaving screen.
-   */
-  exit: (dir: TransitionDirection) => {
-    switch (dir) {
-      case 'menu-to-ingredient':
-        return {
-          opacity: 0,
-          scale: 0.85,
-          filter: 'blur(8px)',
-          transition: { duration: EXIT_S, ease: EASE_IN },
-        };
-      case 'ingredient-to-cooking':
-        return {
-          opacity: [1, 0.7, 0],
-          clipPath: [RECT, DIAMOND, POINT],
-          transition: { duration: MORPH_S, ease: EASE_IN_OUT, times: [0, 0.55, 1] },
-        };
-      case 'to-menu':
-        return {
-          opacity: 0,
-          y: 80,
-          transition: { duration: EXIT_S, ease: EASE_IN },
-        };
-      default:
-        return {
-          opacity: 0,
-          transition: { duration: EXIT_S * 0.75 },
-        };
-    }
-  },
+  initial: (custom: ScreenTransitionCustom) => resolve(custom, 'initial'),
+  animate: (custom: ScreenTransitionCustom) => resolve(custom, 'animate'),
+  exit: (custom: ScreenTransitionCustom) => resolve(custom, 'exit'),
 };

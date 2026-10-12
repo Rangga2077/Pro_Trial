@@ -13,3 +13,5 @@ imagehash
 ftfy
 regex
 git+https://github.com/openai/CLIP.git
+vosk
+sounddevice

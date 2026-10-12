@@ -1,7 +1,12 @@
-import { motion } from 'framer-motion';
-import { useState } from 'react';
-import type { GestureAction, Ingredient, Recipe } from '../../types/contracts';
+import { motion, useReducedMotion } from 'framer-motion';
+import { Fragment, useEffect, useState } from 'react';
+import { Hand } from 'lucide-react';
+import type { GestureAction, Ingredient, Recipe, VoiceCommandMessage, VoiceState } from '../../types/contracts';
 import type { ThemeMode } from '../../hooks/useProjectionHud';
+import { useIdleActivity } from '../../hooks/useIdleActivity';
+import { sharedLayoutIds } from './screenTransitions';
+import { ScanZoneAmbient } from './ScanZoneAmbient';
+import { VoiceStatusIndicator } from './VoiceStatusIndicator';
 
 export type ScanState = 'EMPTY' | 'DETECTING' | 'MATCHED' | 'WRONG ITEM' | 'READY';
 const SCAN_STATES: ScanState[] = ['EMPTY', 'DETECTING', 'MATCHED', 'WRONG ITEM', 'READY'];
@@ -14,6 +19,8 @@ export interface IngredientCheckProps {
     onBack: () => void;
     theme: ThemeMode;
     onToggleTheme: () => void;
+    voiceState: VoiceState;
+    voiceCommand: VoiceCommandMessage | null;
 }
 
 /* ── Theme palette ───────────────────────────────────────────────────
@@ -72,6 +79,9 @@ const PALETTES = {
         cameraZoneBg: '#F0F9FF',
         cameraZoneBorder: '#93C5FD',
         cornerBracket: '#0284C7',
+        beamRgb: '2, 132, 199',
+        particleA: '#7DD3FC',
+        particleB: '#C4B5FD',
         gradientTint: 'linear-gradient(180deg, rgba(2,132,199,0.05) 0%, transparent 100%)',
         placeholderTitleText: '#0284C7',
         placeholderSubText: '#94A3B8',
@@ -88,6 +98,9 @@ const PALETTES = {
         guideBadgeText: '#7C3AED',
         guideRowLabel: '#7C3AED',
         guideRowDesc: '#64748B',
+        guideRowRest: 'rgba(124,58,237,0)',
+        guideRowHighlight: 'rgba(124,58,237,0.10)',
+        guideRowFlash: 'rgba(124,58,237,0.22)',
         guideDivider: '#F1F5F9',
         voiceBorderTop: '#EDE9FE',
         voiceText: '#7C3AED',
@@ -158,6 +171,9 @@ const PALETTES = {
         cameraZoneBg: 'rgba(56,132,222,0.06)',
         cameraZoneBorder: '#3B6CB0',
         cornerBracket: '#3B82F6',
+        beamRgb: '59, 130, 246',
+        particleA: '#BAE6FD',
+        particleB: '#DDD6FE',
         gradientTint: 'linear-gradient(180deg, rgba(59,130,246,0.08) 0%, transparent 100%)',
         placeholderTitleText: '#7DB4F5',
         placeholderSubText: '#6B7280',
@@ -174,6 +190,9 @@ const PALETTES = {
         guideBadgeText: '#B79CF5',
         guideRowLabel: '#B79CF5',
         guideRowDesc: '#8B96AB',
+        guideRowRest: 'rgba(167,139,250,0)',
+        guideRowHighlight: 'rgba(167,139,250,0.14)',
+        guideRowFlash: 'rgba(167,139,250,0.28)',
         guideDivider: 'rgba(255,255,255,0.06)',
         voiceBorderTop: 'rgba(255,255,255,0.08)',
         voiceText: '#B79CF5',
@@ -278,13 +297,9 @@ function PointingUpIcon({ color = '#A78BFA' }: { color?: string }) {
     );
 }
 
-/** Single-finger "back" icon */
-function BackFingerIcon({ color = '#A78BFA' }: { color?: string }) {
-    return (
-        <div style={{ width: 16, height: 16, position: 'relative', overflow: 'hidden', flexShrink: 0 }}>
-            <div style={{ width: 4.67, height: 9.33, left: 3.33, top: 3.33, position: 'absolute', outline: `1.33px ${color} solid`, outlineOffset: '-0.67px' }} />
-        </div>
-    );
+/** Open-palm icon (back-to-menu gesture) */
+function OpenPalmIcon({ color = '#A78BFA' }: { color?: string }) {
+    return <Hand size={16} color={color} strokeWidth={1.6} style={{ flexShrink: 0 }} />;
 }
 
 /** Thumbs-up icon (theme switcher gesture) */
@@ -298,6 +313,17 @@ function ThumbUpIcon({ color = '#A78BFA' }: { color?: string }) {
         </div>
     );
 }
+
+/** Gesture Guide rows. `action` links a row to the backend's final
+ *  gesture action so the row can flash when that gesture fires. */
+const GUIDE_ROWS: { id: string; label: string; description: string; Icon: React.FC<{ color?: string }>; action: GestureAction | null }[] = [
+    { id: 'scan', label: 'SCAN', description: 'Hold item over detection zone', Icon: PointingUpIcon, action: null },
+    { id: 'back', label: 'BACK', description: 'Open palm — return to recipe menu', Icon: OpenPalmIcon, action: 'BACK_TO_MENU' },
+    { id: 'theme', label: 'THEME', description: 'Thumbs up — switch light/dark', Icon: ThumbUpIcon, action: 'TOGGLE_THEME' },
+];
+
+/** How long each Gesture Guide row stays highlighted while the screen is idle. */
+const ATTRACT_STEP_MS = 2400;
 
 /** Mic / sound-wave bars icon */
 function MicBarsIcon({ color = '#C4B5FD' }: { color?: string }) {
@@ -354,13 +380,14 @@ function IngredientRow({ ing, checked, onToggle, palette }: { ing: Ingredient; c
         <div
             onClick={onToggle}
             style={{
-                height: 56, minHeight: 56, position: 'relative',
+                // Shrinks from 56px toward 36px on short screens before the list scrolls.
+                height: 56, minHeight: 36, position: 'relative',
                 background: checked ? palette.rowBgChecked : palette.rowBg,
                 borderRadius: 14,
                 border: `0.80px ${checked ? palette.rowBorderChecked : palette.rowBorder} solid`,
                 display: 'flex', alignItems: 'center',
                 padding: '0 12.80px', gap: 10,
-                flexShrink: 0,
+                flexShrink: 1,
                 cursor: 'pointer',
                 transition: 'background 0.18s ease, border-color 0.18s ease',
             }}
@@ -425,21 +452,23 @@ function IngredientRow({ ing, checked, onToggle, palette }: { ing: Ingredient; c
     );
 }
 
-/** Single utensil row in the left panel */
-function UtensilRow({ name, optional = false, palette }: { name: string; optional?: boolean; palette: Palette }) {
+/** Single utensil chip in the left panel (wraps, so utensils fit in 1–2 lines) */
+function UtensilChip({ name, optional = false, palette }: { name: string; optional?: boolean; palette: Palette }) {
     return (
         <div style={{
-            display: 'flex', alignItems: 'center', gap: 12,
-            padding: '6px 12px', background: palette.utensilBg,
-            borderRadius: 10, border: `0.80px ${palette.utensilBorder} solid`,
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '4px 10px', background: palette.utensilBg,
+            borderRadius: 999, border: `0.80px ${palette.utensilBorder} solid`,
         }}>
             <div style={{ width: 6, height: 6, background: palette.utensilDot, borderRadius: 3, flexShrink: 0 }} />
-            <span style={{ color: palette.utensilText, fontSize: 12, fontFamily: 'Inter, sans-serif', fontWeight: 400, lineHeight: '18px', flex: 1 }}>
+            <span style={{ color: palette.utensilText, fontSize: 12, fontFamily: 'Inter, sans-serif', fontWeight: 400, lineHeight: '18px', whiteSpace: 'nowrap' }}>
                 {name}
             </span>
-            <span style={{ color: palette.utensilMetaText, fontSize: 9.60, fontFamily: 'Inter, sans-serif', fontWeight: 400, lineHeight: '14.40px', whiteSpace: 'nowrap' }}>
-                ({optional ? 'optional' : 'required'})
-            </span>
+            {optional && (
+                <span style={{ color: palette.utensilMetaText, fontSize: 9.60, fontFamily: 'Inter, sans-serif', fontWeight: 400, lineHeight: '14.40px', whiteSpace: 'nowrap' }}>
+                    (optional)
+                </span>
+            )}
         </div>
     );
 }
@@ -453,10 +482,27 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
     onBack,
     theme,
     onToggleTheme,
+    voiceState,
+    voiceCommand,
 }) => {
     const [scanState, setScanState] = useState<ScanState>('EMPTY');
     const [checkedSet, setCheckedSet] = useState<Set<number>>(new Set());
     const palette = PALETTES[theme];
+
+    /* ── Idle / interaction state ── */
+    const { isIdle, isDetecting, gesturePulse, lastGesture, markActivity } = useIdleActivity();
+    const reduced = useReducedMotion() ?? false;
+    const ambient = isIdle && !reduced;
+
+    // While idle, walk a highlight through the Gesture Guide rows.
+    const [attractIndex, setAttractIndex] = useState(0);
+    useEffect(() => {
+        if (!isIdle) return;
+        const timer = window.setInterval(() => {
+            setAttractIndex(index => (index + 1) % GUIDE_ROWS.length);
+        }, ATTRACT_STEP_MS);
+        return () => window.clearInterval(timer);
+    }, [isIdle]);
 
     const ingredients = recipe.ingredients;
     const requiredCount = ingredients.filter(i => !isOptional(i)).length;
@@ -488,10 +534,11 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
 
     return (
         /* ── Outer shell ──────────────────────────────────────────── */
-        <div style={{ width: '100%', height: '100%', background: palette.shellBg, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-
-            {/* Title-bar spacer (Electron frame area) */}
-            <div style={{ height: 48.80, flexShrink: 0 }} />
+        <div
+            onPointerMove={markActivity}
+            onPointerDown={markActivity}
+            style={{ width: '100%', height: '100%', background: palette.shellBg, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+        >
 
             {/* Content wrapper */}
             <div style={{ flex: 1, minHeight: 0, padding: 16.34, display: 'flex', flexDirection: 'column' }}>
@@ -507,10 +554,23 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                     display: 'flex',
                     flexDirection: 'column',
                     gap: 9.60,
+                    position: 'relative',
                 }}>
 
+                    {/* Shared surface — morphs in from the selected menu card */}
+                    <motion.div
+                        layoutId={sharedLayoutIds.surface(recipe.id)}
+                        style={{
+                            position: 'absolute', inset: 0,
+                            borderRadius: 36,
+                            background: palette.cardBg,
+                            pointerEvents: 'none',
+                            zIndex: 0,
+                        }}
+                    />
+
                     {/* ── HEADER SECTION ──────────────────────────── */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', zIndex: 1, flexShrink: 0 }}>
 
                         {/* Row 1: Status pills */}
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
@@ -542,6 +602,14 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                                     {gestureText}
                                 </span>
                             </div>
+
+                            {/* Voice mic status + last heard phrase */}
+                            <VoiceStatusIndicator
+                                state={voiceState}
+                                command={voiceCommand}
+                                height={33.60}
+                                colors={{ bg: palette.pillBg, border: palette.pillBorderWs, text: palette.pillText, accent: palette.voiceText }}
+                            />
 
                             {/* Theme switcher */}
                             <ThemeSwitcher theme={theme} onToggle={onToggleTheme} palette={palette} />
@@ -612,7 +680,7 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                     </div>
 
                     {/* ── RECIPE TITLE ROW ────────────────────────── */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, position: 'relative', zIndex: 1 }}>
                         <span style={{
                             color: palette.titleText,
                             fontSize: 19.20,
@@ -622,7 +690,14 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                             lineHeight: '28.80px',
                             letterSpacing: 0.58,
                         }}>
-                            {recipe.title.toUpperCase()} — INGREDIENT CHECK
+                            <motion.span
+                                layoutId={sharedLayoutIds.title(recipe.id)}
+                                layout="position"
+                                style={{ display: 'inline-block' }}
+                            >
+                                {recipe.title.toUpperCase()}
+                            </motion.span>
+                            {' — INGREDIENT CHECK'}
                         </span>
 
                         {/* Required badge */}
@@ -649,7 +724,7 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                     </div>
 
                     {/* ── MAIN 3-COLUMN CONTENT ───────────────────── */}
-                    <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 14, overflow: 'hidden' }}>
+                    <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 14, overflow: 'hidden', position: 'relative', zIndex: 1 }}>
 
                         {/* ──── LEFT: INGREDIENTS + UTENSILS ───────── */}
                         <div style={{
@@ -665,8 +740,14 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                             {/* INGREDIENTS label */}
                             <div style={{ ...sectionLabel, marginBottom: 10, flexShrink: 0 }}>INGREDIENTS</div>
 
-                            {/* Ingredient list */}
-                            <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {/* Ingredient list — rows shrink first, then the list scrolls */}
+                            <div style={{
+                                flex: '0 1 auto', minHeight: 0,
+                                overflowY: 'auto',
+                                scrollbarWidth: 'thin',
+                                scrollbarColor: `${palette.cardBorder} transparent`,
+                                display: 'flex', flexDirection: 'column', gap: 6,
+                            }}>
                                 {ingredients.map((ing, i) => (
                                     <IngredientRow
                                         key={i}
@@ -676,16 +757,16 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                                         palette={palette}
                                     />
                                 ))}
+                            </div>
 
-                                {/* Spacer */}
-                                <div style={{ paddingTop: 6, paddingBottom: 6, flexShrink: 0 }} />
-
-                                {/* UTENSILS label */}
-                                <div style={{ ...sectionLabel, marginBottom: 2, flexShrink: 0 }}>UTENSILS</div>
-
-                                <UtensilRow name="Wok" palette={palette} />
-                                <UtensilRow name="Spatula" palette={palette} />
-                                <UtensilRow name="Cutting Board" optional palette={palette} />
+                            {/* Utensils — always visible below the list */}
+                            <div style={{ flexShrink: 0, marginTop: 12 }}>
+                                <div style={{ ...sectionLabel, marginBottom: 6 }}>UTENSILS</div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                    <UtensilChip name="Wok" palette={palette} />
+                                    <UtensilChip name="Spatula" palette={palette} />
+                                    <UtensilChip name="Cutting Board" optional palette={palette} />
+                                </div>
                             </div>
                         </div>
 
@@ -708,14 +789,18 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                                 borderRadius: 16,
                                 border: `1.60px ${palette.cameraZoneBorder} solid`,
                             }}>
-                                {/* Corner brackets */}
-                                <div style={{ width: 24, height: 24, position: 'absolute', left: 1.60, top: 1.60, borderRadius: 3, borderLeft: `1.60px ${palette.cornerBracket} solid`, borderTop: `1.60px ${palette.cornerBracket} solid` }} />
-                                <div style={{ width: 24, height: 24, position: 'absolute', right: 1.60, top: 1.60, borderRadius: 3, borderTop: `1.60px ${palette.cornerBracket} solid`, borderRight: `1.60px ${palette.cornerBracket} solid` }} />
-                                <div style={{ width: 24, height: 24, position: 'absolute', left: 1.60, bottom: 1.60, borderRadius: 3, borderLeft: `1.60px ${palette.cornerBracket} solid`, borderBottom: `1.60px ${palette.cornerBracket} solid` }} />
-                                <div style={{ width: 24, height: 24, position: 'absolute', right: 1.60, bottom: 1.60, borderRadius: 3, borderRight: `1.60px ${palette.cornerBracket} solid`, borderBottom: `1.60px ${palette.cornerBracket} solid` }} />
-
                                 {/* Subtle gradient tint */}
                                 <div style={{ position: 'absolute', inset: 0, background: palette.gradientTint, borderRadius: 16 }} />
+
+                                {/* Corner brackets + idle / detection / gesture animation */}
+                                <ScanZoneAmbient
+                                    isIdle={isIdle}
+                                    isDetecting={isDetecting}
+                                    gesturePulse={gesturePulse}
+                                    bracketColor={palette.cornerBracket}
+                                    beamRgb={palette.beamRgb}
+                                    particleColors={[palette.particleA, palette.particleB]}
+                                />
 
                                 {/* EMPTY STATE: Scan placeholder (replaced by camera feed later) */}
                                 <div style={{
@@ -725,10 +810,18 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                                     paddingLeft: 32, paddingRight: 32,
                                     gap: 0,
                                 }}>
-                                    <div style={{ marginBottom: 16 }}>
+                                    <motion.div
+                                        style={{ marginBottom: 16 }}
+                                        animate={ambient ? { y: [0, -6, 0] } : { y: 0 }}
+                                        transition={ambient ? { duration: 2.4, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.3 }}
+                                    >
                                         <ScannerIcon color={palette.scannerIcon} />
-                                    </div>
-                                    <div style={{ marginBottom: 8, textAlign: 'center' }}>
+                                    </motion.div>
+                                    <motion.div
+                                        style={{ marginBottom: 8, textAlign: 'center' }}
+                                        animate={ambient ? { opacity: [0.7, 1, 0.7] } : { opacity: 1 }}
+                                        transition={ambient ? { duration: 2.4, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.3 }}
+                                    >
                                         <span style={{
                                             color: palette.placeholderTitleText, fontSize: 16,
                                             fontFamily: 'Inter, sans-serif', fontWeight: 500,
@@ -737,7 +830,7 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                                         }}>
                                             PLACE INGREDIENTS TO SCAN
                                         </span>
-                                    </div>
+                                    </motion.div>
                                     <span style={{
                                         color: palette.placeholderSubText, fontSize: 12,
                                         fontFamily: 'Inter, sans-serif', fontWeight: 400,
@@ -776,8 +869,18 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                             </button>
                         </div>
 
-                        {/* ──── RIGHT: DETECTED ITEMS + GESTURE GUIDE ─ */}
-                        <div style={{ width: 280, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12, overflow: 'hidden' }}>
+                        {/* ──── RIGHT: DETECTED ITEMS + GESTURE GUIDE ─ *
+                         * The guide never shrinks; detected-item rows give up
+                         * height first, and the column scrolls only as a last resort.
+                         * ─────────────────────────────────────────────── */}
+                        <div style={{
+                            // 312px keeps the guide title + badge and each gesture row on one line.
+                            width: 312, flexShrink: 0, minHeight: 0,
+                            display: 'flex', flexDirection: 'column', gap: 12,
+                            overflowY: 'auto',
+                            scrollbarWidth: 'thin',
+                            scrollbarColor: `${palette.cardBorder} transparent`,
+                        }}>
 
                             {/* DETECTED ITEMS panel */}
                             <div style={{
@@ -787,13 +890,15 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                                 padding: 16,
                                 display: 'flex',
                                 flexDirection: 'column',
-                                flexShrink: 0,
+                                flex: '0 1 auto', minHeight: 0,
+                                overflow: 'hidden',
                             }}>
-                                <div style={{ ...sectionLabel, marginBottom: 10 }}>DETECTED ITEMS</div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                <div style={{ ...sectionLabel, marginBottom: 8, flexShrink: 0 }}>DETECTED ITEMS</div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '0 1 auto', minHeight: 0 }}>
                                     {Array.from({ length: 3 }).map((_, i) => (
                                         <div key={i} style={{
-                                            height: 44, background: palette.detectedItemBg,
+                                            height: 44, minHeight: 28, flexShrink: 1,
+                                            background: palette.detectedItemBg,
                                             borderRadius: 14, border: `0.80px ${palette.detectedItemBorder} solid`,
                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                                         }}>
@@ -814,68 +919,72 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                                 padding: 16,
                                 display: 'flex',
                                 flexDirection: 'column',
-                                flex: 1, minHeight: 0,
+                                flex: '1 0 auto',
                             }}>
-                                {/* Header row */}
-                                <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 0, height: 35 }}>
-                                    <GestureIcon color={palette.guideHeaderText} size={16} />
-                                    <span style={{
-                                        color: palette.guideHeaderText, fontSize: 11.20, fontFamily: 'Inter, sans-serif',
-                                        fontWeight: 700, textTransform: 'uppercase', lineHeight: '16.80px', letterSpacing: 1.68,
-                                    }}>GESTURE GUIDE</span>
+                                {/* Header row — the badge wraps under the title when the panel is narrow */}
+                                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', columnGap: 8, rowGap: 6 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <GestureIcon color={palette.guideHeaderText} size={16} />
+                                        <span style={{
+                                            color: palette.guideHeaderText, fontSize: 11.20, fontFamily: 'Inter, sans-serif',
+                                            fontWeight: 700, textTransform: 'uppercase', lineHeight: '16.80px', letterSpacing: 1.68,
+                                            whiteSpace: 'nowrap',
+                                        }}>GESTURE GUIDE</span>
+                                    </div>
                                     {/* INGREDIENT CHECK badge */}
                                     <div style={{
-                                        position: 'absolute', right: 0, top: 2.83,
                                         background: palette.guideBadgeBg, borderRadius: 999,
                                         border: `0.80px ${palette.guideBadgeBorder} solid`,
-                                        padding: '8px 8.80px',
+                                        padding: '4px 8.80px',
                                         display: 'flex', alignItems: 'center',
+                                        flexShrink: 0,
                                     }}>
                                         <span style={{
                                             color: palette.guideBadgeText, fontSize: 8.80, fontFamily: 'Inter, sans-serif',
                                             fontWeight: 700, textTransform: 'uppercase', lineHeight: '13.20px', letterSpacing: 0.88,
+                                            whiteSpace: 'nowrap',
                                         }}>INGREDIENT CHECK</span>
                                     </div>
                                 </div>
 
-                                {/* Gesture rows */}
-                                <div style={{ paddingTop: 12, display: 'flex', flexDirection: 'column' }}>
-                                    {/* SCAN gesture */}
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 8 }}>
-                                        <div style={{ width: 20, display: 'flex', alignItems: 'center' }}>
-                                            <PointingUpIcon color={palette.pointingIcon} />
-                                        </div>
-                                        <span style={{ color: palette.guideRowLabel, fontSize: 11.20, fontFamily: 'Inter, sans-serif', fontWeight: 700, textTransform: 'uppercase', lineHeight: '16.80px', letterSpacing: 0.67, width: 64, flexShrink: 0 }}>SCAN</span>
-                                        <span style={{ color: palette.guideRowDesc, fontSize: 10.40, fontFamily: 'Inter, sans-serif', fontWeight: 400, lineHeight: '15.60px' }}>Hold item over detection zone</span>
-                                    </div>
-
-                                    {/* Divider */}
-                                    <div style={{ height: 1, background: palette.guideDivider, margin: '5px 0' }} />
-
-                                    {/* BACK gesture */}
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 8 }}>
-                                        <div style={{ width: 20, display: 'flex', alignItems: 'center' }}>
-                                            <BackFingerIcon color={palette.pointingIcon} />
-                                        </div>
-                                        <span style={{ color: palette.guideRowLabel, fontSize: 11.20, fontFamily: 'Inter, sans-serif', fontWeight: 700, textTransform: 'uppercase', lineHeight: '16.80px', letterSpacing: 0.67, width: 64, flexShrink: 0 }}>BACK</span>
-                                        <span style={{ color: palette.guideRowDesc, fontSize: 10.40, fontFamily: 'Inter, sans-serif', fontWeight: 400, lineHeight: '15.60px' }}>Return to recipe menu</span>
-                                    </div>
-
-                                    {/* Divider */}
-                                    <div style={{ height: 1, background: palette.guideDivider, margin: '5px 0' }} />
-
-                                    {/* THEME gesture */}
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 8 }}>
-                                        <div style={{ width: 20, display: 'flex', alignItems: 'center' }}>
-                                            <ThumbUpIcon color={palette.pointingIcon} />
-                                        </div>
-                                        <span style={{ color: palette.guideRowLabel, fontSize: 11.20, fontFamily: 'Inter, sans-serif', fontWeight: 700, textTransform: 'uppercase', lineHeight: '16.80px', letterSpacing: 0.67, width: 64, flexShrink: 0 }}>THEME</span>
-                                        <span style={{ color: palette.guideRowDesc, fontSize: 10.40, fontFamily: 'Inter, sans-serif', fontWeight: 400, lineHeight: '15.60px' }}>Thumbs up — switch light/dark</span>
-                                    </div>
+                                {/* Gesture rows — idle highlight cycles; a row flashes when its gesture fires */}
+                                <div style={{ paddingTop: 10, display: 'flex', flexDirection: 'column' }}>
+                                    {GUIDE_ROWS.map((row, i) => (
+                                        <Fragment key={row.id}>
+                                            {i > 0 && <div style={{ height: 1, background: palette.guideDivider, margin: '4px 0' }} />}
+                                            <motion.div
+                                                animate={{ backgroundColor: isIdle && attractIndex === i ? palette.guideRowHighlight : palette.guideRowRest }}
+                                                transition={{ duration: 0.4 }}
+                                                style={{
+                                                    position: 'relative', isolation: 'isolate',
+                                                    display: 'flex', alignItems: 'center', gap: 8,
+                                                    padding: '4px 8px', borderRadius: 8,
+                                                }}
+                                            >
+                                                {row.action !== null && row.action === lastGesture && gesturePulse > 0 && (
+                                                    <motion.div
+                                                        key={gesturePulse}
+                                                        initial={{ opacity: 1 }}
+                                                        animate={{ opacity: 0 }}
+                                                        transition={{ duration: 1.2, ease: 'easeOut' }}
+                                                        style={{ position: 'absolute', inset: 0, zIndex: -1, borderRadius: 8, background: palette.guideRowFlash }}
+                                                    />
+                                                )}
+                                                <div style={{ width: 20, display: 'flex', alignItems: 'center' }}>
+                                                    <row.Icon color={palette.pointingIcon} />
+                                                </div>
+                                                <span style={{ color: palette.guideRowLabel, fontSize: 11.20, fontFamily: 'Inter, sans-serif', fontWeight: 700, textTransform: 'uppercase', lineHeight: '16.80px', letterSpacing: 0.67, width: 46, flexShrink: 0 }}>{row.label}</span>
+                                                <span style={{ color: palette.guideRowDesc, fontSize: 10.40, fontFamily: 'Inter, sans-serif', fontWeight: 400, lineHeight: '15.60px' }}>{row.description}</span>
+                                            </motion.div>
+                                        </Fragment>
+                                    ))}
                                 </div>
 
-                                {/* Voice confirm row */}
-                                <div style={{ paddingTop: 8, display: 'flex', flexDirection: 'column' }}>
+                                {/* Voice confirm row — live only while the mic is listening */}
+                                <div style={{
+                                    paddingTop: 8, marginBottom: 10, display: 'flex', flexDirection: 'column',
+                                    opacity: voiceState === 'listening' ? 1 : 0.45, transition: 'opacity 0.3s ease',
+                                }}>
                                     <div style={{ paddingTop: 8, borderTop: `0.80px ${palette.voiceBorderTop} solid`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                             {/* Mic icon */}
@@ -887,7 +996,12 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                                                 SAY &quot;READY&quot; TO CONFIRM
                                             </span>
                                         </div>
-                                        <MicBarsIcon color={palette.micBars} />
+                                        <motion.div
+                                            animate={voiceState === 'listening' && !reduced ? { opacity: [0.55, 1, 0.55] } : { opacity: 1 }}
+                                            transition={voiceState === 'listening' && !reduced ? { duration: 1.4, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.3 }}
+                                        >
+                                            <MicBarsIcon color={palette.micBars} />
+                                        </motion.div>
                                     </div>
                                 </div>
 
@@ -923,6 +1037,8 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                         justifyContent: 'space-between',
                         alignItems: 'center',
                         flexShrink: 0,
+                        position: 'relative',
+                        zIndex: 1,
                     }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                             <button
@@ -942,27 +1058,6 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
 
                 </div>
             </div>
-
-            {/* Decorative ambient dots (from Figma background) */}
-            {[
-                { left: 140.06, top: 122.69, size: 5, color: '#BAE6FD' },
-                { left: 957.10, top: 163.57, size: 6, color: '#BAE6FD' },
-                { left: 70.03, top: 490.75, size: 5, color: '#BAE6FD' },
-                { left: 1062.15, top: 463.49, size: 5, color: '#BAE6FD' },
-                { left: 525.24, top: 54.53, size: 5, color: '#DDD6FE' },
-                { left: 887.06, top: 599.80, size: 6, color: '#DDD6FE' },
-                { left: 256.77, top: 627.06, size: 5, color: '#DDD6FE' },
-            ].map((dot, i) => (
-                <div key={i} style={{
-                    position: 'absolute',
-                    left: dot.left, top: dot.top,
-                    width: dot.size, height: dot.size,
-                    background: dot.color,
-                    borderRadius: dot.size / 2,
-                    opacity: 0.80,
-                    pointerEvents: 'none',
-                }} />
-            ))}
         </div>
     );
 };

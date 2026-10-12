@@ -19,6 +19,16 @@ class Settings(BaseSettings):
     GESTURE_MONITOR_ENABLED: bool = True
     GESTURE_MONITOR_SAMPLE_SECONDS: float = 0.25
 
+    # Voice commands (offline Vosk, English). Off by default so the app and
+    # tests run without a microphone or model download.
+    VOICE_ENABLED: bool = False
+    VOICE_MODEL_PATH: Path = BACKEND_ROOT / "app" / "engines" / "audio" / "models" / "vosk-model-small-en-us-0.15"
+    VOICE_DEVICE_INDEX: int | None = None
+    VOICE_SAMPLE_RATE: int = 16000
+    VOICE_MIN_CONFIDENCE: float = 0.6
+    VOICE_MIN_CONFIDENCE_SINGLE_WORD: float = 0.8
+    VOICE_COOLDOWN_SECONDS: float = 1.0
+
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "llama3.2"
     RECIPE_DATA_DIR: Path = PROJECT_ROOT / "data" / "recipes"

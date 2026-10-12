@@ -78,11 +78,20 @@ Select request body:
 The frontend sends typed JSON messages.
 
 ```ts
-type ClientWebSocketMessage = LLMQueryMessage;
+type ClientWebSocketMessage = LLMQueryMessage | UIModeMessage;
 
 interface LLMQueryMessage {
   type: "llm_query";
   query: string;
+}
+
+type UIMode = "menu" | "ingredient_check" | "cooking";
+
+/** Sent whenever the HUD screen changes and after every reconnect, so the
+ *  backend maps voice phrases for the screen that is showing. */
+interface UIModeMessage {
+  type: "ui_mode";
+  mode: UIMode;
 }
 ```
 
@@ -95,13 +104,21 @@ Example:
 }
 ```
 
+```json
+{ "type": "ui_mode", "mode": "cooking" }
+```
+
+Any other payload gets a `status` reply with `"Invalid WebSocket message"`.
+
 ## WebSocket Server Messages
 
 ```ts
 type ServerWebSocketMessage =
   | CVUpdateMessage
   | LLMResponseMessage
-  | StatusMessage;
+  | StatusMessage
+  | VoiceCommandMessage
+  | VoiceStatusMessage;
 ```
 
 ### `cv_update`
@@ -117,6 +134,15 @@ type GestureAction =
   | "SELECT_RECIPE"
   | "NEXT_STEP"
   | "PREVIOUS_STEP"
+  | "TOGGLE_THEME"
+  // Voice-only actions (never emitted by the gesture interpreter)
+  | "START_TIMER"
+  | "PAUSE_TIMER"
+  | "RESET_TIMER"
+  | "READ_STEP"
+  | "CONFIRM_READY"
+  | "THEME_DARK"
+  | "THEME_LIGHT"
   | "NO_ACTION";
 
 interface Detection {
@@ -157,6 +183,47 @@ interface StatusMessage {
   type: "status";
   data: {
     message: string;
+  };
+}
+```
+
+### `voice_command`
+
+Sent once per recognized voice phrase (offline Vosk, English). The backend has already mapped the phrase for the current `ui_mode`; phrases that don't belong to that screen are never sent.
+
+```ts
+interface VoiceCommandMessage {
+  type: "voice_command";
+  data: {
+    action: GestureAction;
+    transcript: string;   // the phrase heard, e.g. "next step"
+    confidence: number;   // 0–1, average Vosk word confidence
+  };
+}
+```
+
+| Screen (`ui_mode`) | Phrase | `action` |
+|---|---|---|
+| `menu` | "next" / "back" / "okay" | `MENU_NEXT` / `MENU_PREVIOUS` / `SELECT_RECIPE` |
+| `ingredient_check` | "ready" | `CONFIRM_READY` (start cooking) |
+| `ingredient_check` | "back to menu" | `BACK_TO_MENU` |
+| `ingredient_check`, `cooking` | "black" / "white" | `THEME_DARK` / `THEME_LIGHT` |
+| `cooking` | "next step", "next" | `NEXT_STEP` |
+| `cooking` | "previous step", "go back" | `PREVIOUS_STEP` |
+| `cooking` | "back to menu" | `BACK_TO_MENU` |
+| `cooking` | "start timer" / "pause timer" / "reset timer" | `START_TIMER` / `PAUSE_TIMER` / `RESET_TIMER` (task timer) |
+| `cooking` | "read step" | `READ_STEP` (frontend reads the step aloud) |
+
+### `voice_status`
+
+Sent to each client when it connects and to everyone whenever the recognizer state changes.
+
+```ts
+interface VoiceStatusMessage {
+  type: "voice_status";
+  data: {
+    state: "disabled" | "listening" | "error";
+    message?: string | null;   // reason, for "error"
   };
 }
 ```

@@ -1,9 +1,12 @@
-import { motion } from 'framer-motion';
-import { ChevronLeft, Pause, Play, RotateCcw, X } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
-import type { Recipe, GestureAction } from '../../types/contracts';
+import { AnimatePresence, motion, useReducedMotion, type Variants } from 'framer-motion';
+import { ChevronLeft, Hand, Pause, Play, Pointer, RotateCcw, ThumbsUp, X, type LucideIcon } from 'lucide-react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import type { GestureAction, Ingredient, Recipe, VoiceCommandMessage, VoiceState } from '../../types/contracts';
 import type { ThemeMode } from '../../hooks/useProjectionHud';
+import { useIdleActivity } from '../../hooks/useIdleActivity';
 import svgPaths from '../svgTimerRings';
+import { StoveZoneAmbient } from './StoveZoneAmbient';
+import { VoiceStatusIndicator } from './VoiceStatusIndicator';
 
 export interface RecipeHudProps {
     recipe: Recipe;
@@ -15,9 +18,10 @@ export interface RecipeHudProps {
     onPreviousStep: () => void;
     onOpenMenu: () => void;
     isConnected: boolean;
-    lastAction: GestureAction | null;
     theme: ThemeMode;
     onToggleTheme: () => void;
+    voiceState: VoiceState;
+    voiceCommand: VoiceCommandMessage | null;
 }
 
 /* ── Theme palette ───────────────────────────────────────────────────
@@ -53,13 +57,25 @@ const PALETTES = {
         utensilText: '#6B7080',
         notesBg: 'rgba(40, 38, 72, 0.08)',
         notesBorder: 'rgba(40, 38, 72, 0.10)',
-        notesText: 'rgba(30, 27, 58, 0.45)',
         switcherBg: 'rgba(40, 38, 72, 0.08)',
         switcherBorder: 'rgba(40, 38, 72, 0.10)',
         switcherIcon: 'rgba(107, 94, 184, 0.85)',
         cancelBg: 'rgba(255, 61, 90, 0.08)',
         cancelBorder: 'rgba(255, 61, 90, 0.35)',
         cancelText: '#E11D48',
+        ingredientAvatarBg: 'rgba(107, 94, 184, 0.12)',
+        ingredientAvatarText: '#6B5EB8',
+        ingredientAmount: '#6B5EB8',
+        guidePanelBg: 'rgba(107, 94, 184, 0.05)',
+        guidePanelBorder: 'rgba(107, 94, 184, 0.22)',
+        guideLabel: '#6B5EB8',
+        guideDesc: 'rgba(30, 27, 58, 0.60)',
+        guideIcon: 'rgba(107, 94, 184, 0.85)',
+        guideRowRest: 'rgba(107, 94, 184, 0)',
+        guideRowHighlight: 'rgba(107, 94, 184, 0.12)',
+        guideRowFlash: 'rgba(107, 94, 184, 0.26)',
+        emberA: '#9B8FD4',
+        emberB: '#FF8FA3',
     },
     dark: {
         cardBg: '#181A26',
@@ -88,13 +104,25 @@ const PALETTES = {
         utensilText: '#B7BEDB',
         notesBg: 'rgba(255, 255, 255, 0.04)',
         notesBorder: 'rgba(255, 255, 255, 0.08)',
-        notesText: 'rgba(241, 240, 247, 0.42)',
         switcherBg: 'rgba(255, 255, 255, 0.06)',
         switcherBorder: 'rgba(255, 255, 255, 0.14)',
         switcherIcon: '#F1F0F7',
         cancelBg: 'rgba(255, 90, 106, 0.12)',
         cancelBorder: 'rgba(255, 90, 106, 0.40)',
         cancelText: '#FF8FA3',
+        ingredientAvatarBg: 'rgba(155, 143, 212, 0.16)',
+        ingredientAvatarText: '#B2A8E0',
+        ingredientAmount: '#B2A8E0',
+        guidePanelBg: 'rgba(155, 143, 212, 0.06)',
+        guidePanelBorder: 'rgba(155, 143, 212, 0.24)',
+        guideLabel: '#B2A8E0',
+        guideDesc: 'rgba(241, 240, 247, 0.62)',
+        guideIcon: '#B2A8E0',
+        guideRowRest: 'rgba(155, 143, 212, 0)',
+        guideRowHighlight: 'rgba(155, 143, 212, 0.16)',
+        guideRowFlash: 'rgba(155, 143, 212, 0.32)',
+        emberA: '#B2A8E0',
+        emberB: '#FF8FA3',
     },
 };
 
@@ -140,89 +168,175 @@ function formatStopwatch(totalSeconds: number): string {
 interface TimerRingProps {
     value: string;
     progress: number;
+    caption: string;
     alert?: boolean;
     valueColor: string;
-    controls?: React.ReactNode;
+    captionColor: string;
+    /** Right side of the caption row: timer controls or the target time. */
+    accessory?: React.ReactNode;
 }
 
-function TimerRing({ value, progress, alert = false, valueColor, controls }: TimerRingProps) {
+/** Height of the caption row under each ring. Both rings share it, so they shrink equally. */
+const TIMER_CAPTION_ROW = 34;
+
+function TimerRing({ value, progress, caption, alert = false, valueColor, captionColor, accessory }: TimerRingProps) {
     const ringColor = alert ? '#FF3D5A' : '#6B5EB8';
     const totalLength = 427.26;
     const dash = (progress / 100) * totalLength;
 
-    const ringContent = (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            {/* SVG Ring */}
-            <div style={{ position: 'relative', width: 168, height: 168 }}>
-                <svg
-                    style={{ position: 'absolute', inset: 0 }}
-                    width="168" height="168"
-                    viewBox="0 0 168 168"
-                    fill="none"
-                >
-                    {/* Outer dim ring */}
-                    <path
-                        d={svgPaths.p3ff9e000}
-                        stroke={ringColor}
-                        strokeOpacity={0.28}
-                        strokeWidth="4"
-                    />
-                    {/* Middle glow ring */}
-                    <path
-                        d={svgPaths.p1cb6a770}
-                        stroke={ringColor}
-                        strokeOpacity={0.62}
-                        strokeWidth="3"
-                    />
-                    {/* Progress arc */}
-                    <motion.path
-                        d={svgPaths.p2c33ce00}
-                        stroke={ringColor}
-                        strokeLinecap="round"
-                        strokeWidth="9"
-                        animate={{ strokeDasharray: `${dash} ${totalLength}` }}
-                        transition={{ duration: 0.35, ease: 'linear' }}
-                    />
-                </svg>
-
+    return (
+        // The alert frame is always mounted (transparent at rest), so starting
+        // the timer fades it in instead of shifting the layout.
+        <div style={{
+            flex: '0 1 auto', minHeight: 0,
+            display: 'flex', flexDirection: 'column', gap: 6,
+            padding: '8px 6px',
+            borderRadius: 16,
+            background: alert ? 'rgba(255, 61, 90, 0.06)' : 'rgba(255, 61, 90, 0)',
+            border: `0.80px solid ${alert ? 'rgba(255, 61, 90, 0.28)' : 'rgba(255, 61, 90, 0)'}`,
+            boxShadow: `0px 0px 30px rgba(255, 61, 90, ${alert ? 0.12 : 0})`,
+            transition: 'background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease',
+        }}>
+            {/* Ring shrinks from 168px on short screens; the time is SVG text so it scales with it. */}
+            <svg
+                viewBox="0 0 168 168"
+                fill="none"
+                style={{ width: '100%', height: 168, minHeight: 0, flexShrink: 1 }}
+            >
+                {/* Outer dim ring */}
+                <path
+                    d={svgPaths.p3ff9e000}
+                    stroke={ringColor}
+                    strokeOpacity={0.28}
+                    strokeWidth="4"
+                />
+                {/* Middle glow ring */}
+                <path
+                    d={svgPaths.p1cb6a770}
+                    stroke={ringColor}
+                    strokeOpacity={0.62}
+                    strokeWidth="3"
+                />
+                {/* Progress arc */}
+                <motion.path
+                    d={svgPaths.p2c33ce00}
+                    stroke={ringColor}
+                    strokeLinecap="round"
+                    strokeWidth="9"
+                    animate={{ strokeDasharray: `${dash} ${totalLength}` }}
+                    transition={{ duration: 0.35, ease: 'linear' }}
+                />
                 {/* Center text */}
-                <div style={{
-                    position: 'absolute', inset: 0,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                    <div style={{
-                        color: valueColor,
+                <text
+                    x="84" y="84"
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fill={valueColor}
+                    style={{
                         fontSize: 26,
                         fontFamily: 'Inter, sans-serif',
                         fontWeight: 700,
-                        lineHeight: '26px',
                         letterSpacing: 1.30,
-                    }}>{value}</div>
-                </div>
-            </div>
+                    }}
+                >{value}</text>
+            </svg>
 
-            {controls && <div style={{ marginTop: 10 }}>{controls}</div>}
+            {/* Caption row */}
+            <div style={{
+                height: TIMER_CAPTION_ROW, flexShrink: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                padding: '0 2px',
+            }}>
+                <span style={{
+                    color: captionColor,
+                    fontSize: 10.40,
+                    fontFamily: 'Inter, sans-serif',
+                    fontWeight: 600,
+                    lineHeight: '15.60px',
+                    letterSpacing: 1.20,
+                    whiteSpace: 'nowrap',
+                }}>{caption}</span>
+                {accessory}
+            </div>
         </div>
     );
-
-    if (alert) {
-        return (
-            <div style={{
-                position: 'relative',
-                background: 'rgba(255, 61, 90, 0.06)',
-                borderRadius: 16,
-                border: '0.80px rgba(255, 61, 90, 0.28) solid',
-                boxShadow: '0px 0px 30px rgba(255, 61, 90, 0.12)',
-                paddingTop: 8,
-                paddingBottom: 8,
-            }}>
-                {ringContent}
-            </div>
-        );
-    }
-
-    return ringContent;
 }
+
+function formatAmount(ing: Ingredient): string {
+    if (!ing.amount && !ing.unit) return '';
+    if (!ing.unit) return String(ing.amount);
+    return `${ing.amount}${ing.unit}`;
+}
+
+/** One ingredient in the right panel list */
+function IngredientLine({ ing, palette }: { ing: Ingredient; palette: Palette }) {
+    const amount = formatAmount(ing);
+    return (
+        <div
+            title={amount ? `${ing.name} — ${amount}` : ing.name}
+            style={{
+                // Shrinks from 30px toward 22px on short screens before the list scrolls.
+                height: 30, minHeight: 22, flexShrink: 1,
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '0 8px',
+                background: palette.ingredientSquareBg,
+                borderRadius: 10,
+                border: `0.80px ${palette.ingredientSquareBorder} solid`,
+            }}
+        >
+            <div style={{
+                width: 20, height: 20, borderRadius: 6, flexShrink: 0,
+                background: palette.ingredientAvatarBg,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+                <span style={{ color: palette.ingredientAvatarText, fontSize: 9.60, fontFamily: 'Inter, sans-serif', fontWeight: 700, lineHeight: '14px' }}>
+                    {(ing.name[0] ?? '?').toUpperCase()}
+                </span>
+            </div>
+            <span style={{
+                flex: 1, minWidth: 0,
+                color: palette.primaryText,
+                fontSize: 12,
+                fontFamily: 'Inter, sans-serif',
+                fontWeight: 500,
+                lineHeight: '18px',
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}>{ing.name}</span>
+            {amount && (
+                <span style={{
+                    flexShrink: 0,
+                    color: palette.ingredientAmount,
+                    fontSize: 10.40,
+                    fontFamily: "'Cousine', 'Courier New', monospace",
+                    lineHeight: '15.60px',
+                    whiteSpace: 'nowrap',
+                }}>{amount}</span>
+            )}
+        </div>
+    );
+}
+
+/** Gesture Guide rows (the cooking gestures the backend interpreter emits).
+ *  `action` lets a row flash when that gesture fires. */
+const GUIDE_ROWS: { id: string; label: string; description: string; Icon: LucideIcon; mirrored?: boolean; action: GestureAction }[] = [
+    { id: 'next', label: 'NEXT', description: 'Right index up', Icon: Pointer, action: 'NEXT_STEP' },
+    { id: 'prev', label: 'PREV', description: 'Left index up', Icon: Pointer, mirrored: true, action: 'PREVIOUS_STEP' },
+    { id: 'menu', label: 'MENU', description: 'Open palm', Icon: Hand, action: 'BACK_TO_MENU' },
+    { id: 'theme', label: 'THEME', description: 'Thumbs up', Icon: ThumbsUp, action: 'TOGGLE_THEME' },
+];
+
+/** Voice phrases for this screen (the backend maps them for `ui_mode: cooking`). */
+const VOICE_PHRASES = ['next step', 'go back', 'read step', 'start / pause / reset timer', 'black / white', 'back to menu'];
+
+/** How long each Gesture Guide row stays highlighted while the screen is idle. */
+const ATTRACT_STEP_MS = 2400;
+
+/** Step text slides in from the side the user is moving toward. */
+const STEP_VARIANTS: Variants = {
+    enter: (direction: number) => ({ opacity: 0, x: direction * 28 }),
+    center: { opacity: 1, x: 0, transition: { duration: 0.28, ease: [0.22, 1, 0.36, 1] } },
+    exit: (direction: number) => ({ opacity: 0, x: direction * -28, transition: { duration: 0.14, ease: 'easeIn' } }),
+};
 
 /* ─── Panel shared styles (theme-dependent) ──────────────────────── */
 function panelBase(palette: Palette): React.CSSProperties {
@@ -275,15 +389,44 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
     onPreviousStep,
     onOpenMenu,
     isConnected,
-    lastAction,
     theme,
     onToggleTheme,
+    voiceState,
+    voiceCommand,
 }) => {
     const palette = PALETTES[theme];
     const PANEL_BASE = panelBase(palette);
     const PANEL_OVERLAY = panelOverlay(palette);
     const SECTION_LABEL = sectionLabelStyle(palette);
     const DIVIDER = dividerStyle(palette);
+
+    /* ── Idle / interaction state ── */
+    const { isIdle, isDetecting, gesturePulse, lastGesture, markActivity } = useIdleActivity();
+    const reduced = useReducedMotion() ?? false;
+    const ambient = isIdle && !reduced;
+
+    // While idle, walk a highlight through the Gesture Guide rows.
+    const [attractIndex, setAttractIndex] = useState(0);
+    useEffect(() => {
+        if (!isIdle) return;
+        const timer = window.setInterval(() => {
+            setAttractIndex(index => (index + 1) % GUIDE_ROWS.length);
+        }, ATTRACT_STEP_MS);
+        return () => window.clearInterval(timer);
+    }, [isIdle]);
+
+    // Direction of the latest step change (click or gesture) — "adjusting
+    // state during render" pattern, so no setState inside an effect.
+    const [stepTrack, setStepTrack] = useState({ step: stepNumber, direction: 1, changes: 0 });
+    if (stepTrack.step !== stepNumber) {
+        setStepTrack({
+            step: stepNumber,
+            direction: stepNumber > stepTrack.step ? 1 : -1,
+            changes: stepTrack.changes + 1,
+        });
+    }
+    const isFirstStep = stepNumber === 1;
+    const isLastStep = stepNumber === totalSteps;
 
     /* ── Timer 1: ad-hoc task timer (dough rising, frying, ...) ──────
      * Manual stopwatch — user starts/stops/resets it. The ring loops
@@ -314,6 +457,46 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
         return () => clearInterval(id);
     }, []);
 
+    /* ── Voice: timer and read-aloud commands ──────────────────────
+     * Navigation commands are handled in useProjectionHud; this screen
+     * owns the task timer and the step text, so it handles these.
+     * "Adjusting state during render" pattern — the command present when
+     * Cooking opens is not for this screen.
+     */
+    const [voiceTrack, setVoiceTrack] = useState({ command: voiceCommand, readRequests: 0 });
+    if (voiceTrack.command !== voiceCommand) {
+        const action = voiceCommand?.data.action;
+        // Don't let the read-aloud step trigger commands through the mic.
+        const ignored = window.speechSynthesis?.speaking ?? false;
+        setVoiceTrack({
+            command: voiceCommand,
+            readRequests: voiceTrack.readRequests + (!ignored && action === 'READ_STEP' ? 1 : 0),
+        });
+        if (!ignored && action === 'START_TIMER') setTaskRunning(true);
+        if (!ignored && action === 'PAUSE_TIMER') setTaskRunning(false);
+        if (!ignored && action === 'RESET_TIMER') {
+            setTaskRunning(false);
+            setTaskSeconds(0);
+        }
+    }
+
+    // Reading aloud is a side effect, so it runs after the render that requested it.
+    const readStepRef = useRef({ stepNumber, instruction });
+    useEffect(() => {
+        readStepRef.current = { stepNumber, instruction };
+    }, [stepNumber, instruction]);
+    useEffect(() => {
+        if (voiceTrack.readRequests === 0 || !window.speechSynthesis) return;
+        const { stepNumber: step, instruction: text } = readStepRef.current;
+        const utterance = new SpeechSynthesisUtterance(`Step ${step}. ${text ?? ''}`);
+        utterance.lang = 'en-US';
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(utterance);
+    }, [voiceTrack.readRequests]);
+
+    // Stop reading aloud when leaving the screen.
+    useEffect(() => () => window.speechSynthesis?.cancel(), []);
+
     const taskValue = formatStopwatch(taskSeconds);
     const cookValue = formatStopwatch(cookSeconds);
     const taskProgress = ((taskSeconds % 60) / 60) * 100;
@@ -321,19 +504,30 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
         ? Math.min(100, (cookSeconds / 60 / recipe.cook_time_minutes) * 100)
         : ((cookSeconds % 300) / 300) * 100;
 
-    const gestureText = lastAction && lastAction !== 'NO_ACTION'
-        ? `LAST GESTURE: ${lastAction.replace(/_/g, ' ')}`
-        : 'LAST GESTURE: RIGHT INDEX / NEXT';
+    // The backend sends a gesture action on a single frame only, so show the
+    // last recognized one rather than the latest frame's action.
+    const gestureText = lastGesture
+        ? `LAST GESTURE: ${lastGesture.replace(/_/g, ' ')}`
+        : 'LAST GESTURE: WAITING';
+
+    const timing = [
+        recipe.prep_time_minutes ? `Prep ${recipe.prep_time_minutes} min` : null,
+        recipe.cook_time_minutes ? `Cook ${recipe.cook_time_minutes} min` : null,
+    ].filter(Boolean).join(' · ');
 
     return (
-        <div style={{
-            width: '100%',
-            height: '100%',
-            background: '#0A0F1A',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-        }}>
+        <div
+            onPointerMove={markActivity}
+            onPointerDown={markActivity}
+            style={{
+                width: '100%',
+                height: '100%',
+                background: '#0A0F1A',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+            }}
+        >
             {/* ── Main card ─────────────────────────────────────────── */}
             <div style={{
                 width: '100%',
@@ -421,7 +615,18 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                             height: 41.60,
                             boxSizing: 'border-box',
                             flex: 1, minWidth: 0,
+                            position: 'relative', isolation: 'isolate', overflow: 'hidden',
                         }}>
+                            {/* Flashes once per recognized gesture */}
+                            {gesturePulse > 0 && (
+                                <motion.div
+                                    key={gesturePulse}
+                                    initial={{ opacity: 1 }}
+                                    animate={{ opacity: 0 }}
+                                    transition={{ duration: 1.2, ease: 'easeOut' }}
+                                    style={{ position: 'absolute', inset: 0, zIndex: -1, background: palette.guideRowFlash }}
+                                />
+                            )}
                             <span style={{
                                 color: palette.pillText,
                                 fontSize: 11,
@@ -432,6 +637,14 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                             }}>{gestureText}</span>
                         </div>
+
+                        {/* Voice mic status + last heard phrase */}
+                        <VoiceStatusIndicator
+                            state={voiceState}
+                            command={voiceCommand}
+                            height={41.60}
+                            colors={{ bg: palette.pillBg, border: palette.pillBorderWs, text: palette.pillText, accent: palette.guideLabel }}
+                        />
 
                         {/* Theme switcher */}
                         <ThemeSwitcher theme={theme} onToggle={onToggleTheme} palette={palette} />
@@ -516,64 +729,143 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                     alignItems: 'stretch',
                 }}>
 
-                    {/* ──── LEFT: TIMERS ──────────────────────────── */}
-                    <div style={{ ...PANEL_BASE, width: 220 }}>
-                        <div style={{
-                            padding: 16.80,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 16,
-                            height: '100%',
-                            boxSizing: 'border-box',
-                        }}>
-                            <div style={SECTION_LABEL}>TIMERS</div>
+                    {/* ──── LEFT: TIMERS + GESTURE GUIDE ──────────── *
+                     * The guide keeps its height; the timer rings shrink
+                     * to make room on short screens.
+                     * ─────────────────────────────────────────────── */}
+                    <div style={{
+                        width: 220, flexShrink: 0, minHeight: 0,
+                        display: 'flex', flexDirection: 'column', gap: 12,
+                    }}>
+                        <div style={{ ...PANEL_BASE, flexGrow: 1, flexShrink: 1, flexBasis: 'auto', minHeight: 0 }}>
+                            <div style={{
+                                padding: 16.80,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 10,
+                                height: '100%',
+                                boxSizing: 'border-box',
+                            }}>
+                                <div style={{ ...SECTION_LABEL, flexShrink: 0 }}>TIMERS</div>
 
-                            <TimerRing
-                                value={taskValue}
-                                progress={taskProgress}
-                                valueColor={palette.primaryText}
-                                alert={taskRunning}
-                                controls={
-                                    <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-                                        <button
-                                            onClick={toggleTask}
-                                            aria-label={taskRunning ? 'Pause task timer' : 'Start task timer'}
-                                            style={{
-                                                width: 34, height: 34, borderRadius: '50%',
-                                                background: taskRunning ? '#FF3D5A' : '#6B5EB8',
-                                                border: 'none', cursor: 'pointer',
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                transition: 'background 0.2s ease',
-                                            }}
-                                        >
-                                            {taskRunning
-                                                ? <Pause size={14} color="white" fill="white" />
-                                                : <Play size={14} color="white" fill="white" />}
-                                        </button>
-                                        <button
-                                            onClick={resetTask}
-                                            aria-label="Reset task timer"
-                                            style={{
-                                                width: 34, height: 34, borderRadius: '50%',
-                                                background: palette.backBtnBg,
-                                                border: `0.80px ${palette.backBtnBorder} solid`,
-                                                cursor: 'pointer',
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            }}
-                                        >
-                                            <RotateCcw size={14} color={palette.chevronColor} />
-                                        </button>
-                                    </div>
-                                }
-                            />
+                                <TimerRing
+                                    value={taskValue}
+                                    progress={taskProgress}
+                                    caption="TASK TIMER"
+                                    valueColor={palette.primaryText}
+                                    captionColor={palette.sectionLabel}
+                                    alert={taskRunning}
+                                    accessory={
+                                        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                                            <button
+                                                onClick={toggleTask}
+                                                aria-label={taskRunning ? 'Pause task timer' : 'Start task timer'}
+                                                style={{
+                                                    width: 34, height: 34, borderRadius: '50%',
+                                                    background: taskRunning ? '#FF3D5A' : '#6B5EB8',
+                                                    border: 'none', cursor: 'pointer',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    transition: 'background 0.2s ease',
+                                                }}
+                                            >
+                                                {taskRunning
+                                                    ? <Pause size={14} color="white" fill="white" />
+                                                    : <Play size={14} color="white" fill="white" />}
+                                            </button>
+                                            <button
+                                                onClick={resetTask}
+                                                aria-label="Reset task timer"
+                                                style={{
+                                                    width: 34, height: 34, borderRadius: '50%',
+                                                    background: palette.backBtnBg,
+                                                    border: `0.80px ${palette.backBtnBorder} solid`,
+                                                    cursor: 'pointer',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                }}
+                                            >
+                                                <RotateCcw size={14} color={palette.chevronColor} />
+                                            </button>
+                                        </div>
+                                    }
+                                />
 
-                            <TimerRing
-                                value={cookValue}
-                                progress={cookProgress}
-                                valueColor={palette.primaryText}
-                            />
+                                <TimerRing
+                                    value={cookValue}
+                                    progress={cookProgress}
+                                    caption="COOK TIME"
+                                    valueColor={palette.primaryText}
+                                    captionColor={palette.sectionLabel}
+                                    accessory={recipe.cook_time_minutes ? (
+                                        <span style={{
+                                            color: palette.secondaryTextDim,
+                                            fontSize: 10.40,
+                                            fontFamily: "'Cousine', 'Courier New', monospace",
+                                            lineHeight: '15.60px',
+                                            whiteSpace: 'nowrap',
+                                        }}>/ {formatStopwatch(recipe.cook_time_minutes * 60)}</span>
+                                    ) : undefined}
+                                />
+                            </div>
+                            <div style={PANEL_OVERLAY} />
                         </div>
-                        <div style={PANEL_OVERLAY} />
+
+                        {/* GESTURE GUIDE — idle highlight cycles; a row flashes when its gesture fires */}
+                        <div style={{
+                            flexShrink: 0,
+                            background: palette.guidePanelBg,
+                            borderRadius: 24,
+                            border: `0.80px ${palette.guidePanelBorder} solid`,
+                            padding: '12px 10px 10px',
+                        }}>
+                            <div style={{ ...SECTION_LABEL, marginBottom: 6, paddingLeft: 6 }}>GESTURE GUIDE</div>
+                            {GUIDE_ROWS.map((row, i) => (
+                                <Fragment key={row.id}>
+                                    {i > 0 && <div style={{ ...DIVIDER, margin: '2px 8px' }} />}
+                                    <motion.div
+                                        animate={{ backgroundColor: isIdle && attractIndex === i ? palette.guideRowHighlight : palette.guideRowRest }}
+                                        transition={{ duration: 0.4 }}
+                                        style={{
+                                            position: 'relative', isolation: 'isolate',
+                                            display: 'flex', alignItems: 'center', gap: 8,
+                                            padding: '4px 6px', borderRadius: 10,
+                                        }}
+                                    >
+                                        {row.action === lastGesture && gesturePulse > 0 && (
+                                            <motion.div
+                                                key={gesturePulse}
+                                                initial={{ opacity: 1 }}
+                                                animate={{ opacity: 0 }}
+                                                transition={{ duration: 1.2, ease: 'easeOut' }}
+                                                style={{ position: 'absolute', inset: 0, zIndex: -1, borderRadius: 10, background: palette.guideRowFlash }}
+                                            />
+                                        )}
+                                        <row.Icon
+                                            size={16}
+                                            color={palette.guideIcon}
+                                            strokeWidth={1.6}
+                                            style={{ flexShrink: 0, transform: row.mirrored ? 'scaleX(-1)' : undefined }}
+                                        />
+                                        <span style={{
+                                            width: 44, flexShrink: 0,
+                                            color: palette.guideLabel,
+                                            fontSize: 11.20,
+                                            fontFamily: 'Inter, sans-serif',
+                                            fontWeight: 700,
+                                            lineHeight: '16.80px',
+                                            letterSpacing: 0.67,
+                                        }}>{row.label}</span>
+                                        <span style={{
+                                            color: palette.guideDesc,
+                                            fontSize: 10.40,
+                                            fontFamily: 'Inter, sans-serif',
+                                            fontWeight: 400,
+                                            lineHeight: '15.60px',
+                                            whiteSpace: 'nowrap',
+                                        }}>{row.description}</span>
+                                    </motion.div>
+                                </Fragment>
+                            ))}
+                        </div>
                     </div>
 
                     {/* ──── CENTER: RECIPE ────────────────────────── */}
@@ -608,91 +900,50 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                             }}>
                                 {recipe.title.toUpperCase()}
                             </div>
-                            <div style={{ ...SECTION_LABEL, display: 'block', marginBottom: 4 }}>
-                                STEP {stepNumber}
-                            </div>
-                            <div style={{
-                                color: palette.secondaryText,
-                                fontSize: 15,
-                                fontFamily: 'Inter, sans-serif',
-                                fontWeight: 400,
-                                lineHeight: '22.50px',
-                            }}>
-                                {instruction ?? 'Follow the recipe step carefully.'}
-                            </div>
+                            {/* Step text slides in from the side the user is moving toward */}
+                            <AnimatePresence mode="wait" initial={false} custom={stepTrack.direction}>
+                                <motion.div
+                                    key={stepNumber}
+                                    custom={stepTrack.direction}
+                                    variants={STEP_VARIANTS}
+                                    initial="enter"
+                                    animate="center"
+                                    exit="exit"
+                                >
+                                    <div style={{ ...SECTION_LABEL, display: 'block', marginBottom: 4 }}>
+                                        STEP {stepNumber}
+                                    </div>
+                                    <div style={{
+                                        color: palette.secondaryText,
+                                        fontSize: 15,
+                                        fontFamily: 'Inter, sans-serif',
+                                        fontWeight: 400,
+                                        lineHeight: '22.50px',
+                                    }}>
+                                        {instruction ?? 'Follow the recipe step carefully.'}
+                                    </div>
+                                </motion.div>
+                            </AnimatePresence>
                         </div>
 
                         {/* Divider */}
                         <div style={DIVIDER} />
 
-                        {/* Stove concentric circles */}
+                        {/* Stove concentric circles + idle / detection / gesture animation */}
                         <div style={{
                             flex: 1,
                             minHeight: 0,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
                             position: 'relative',
                             overflow: 'hidden',
                         }}>
-                            {/* Outer glow blob */}
-                            <div style={{
-                                position: 'absolute',
-                                width: 340,
-                                height: 340,
-                                background: palette.glowOuter,
-                                borderRadius: '50%',
-                                filter: 'blur(60px)',
-                            }} />
-                            {/* Middle glow blob */}
-                            <div style={{
-                                position: 'absolute',
-                                width: 284,
-                                height: 284,
-                                background: palette.glowMiddle,
-                                borderRadius: '50%',
-                                filter: 'blur(30px)',
-                            }} />
-                            {/* Outer ring */}
-                            <div style={{
-                                position: 'absolute',
-                                width: 224,
-                                height: 224,
-                                borderRadius: '50%',
-                                border: '1.60px rgba(107, 94, 184, 0.38) solid',
-                                boxShadow: '0px 0px 60px rgba(107, 94, 184, 0.28), inset 0px 0px 40px rgba(107, 94, 184, 0.10)',
-                            }} />
-                            {/* Inner ring */}
-                            <div style={{
-                                position: 'absolute',
-                                width: 176,
-                                height: 176,
-                                borderRadius: '50%',
-                                border: '0.80px rgba(107, 94, 184, 0.28) solid',
-                                boxShadow: 'inset 0px 0px 30px rgba(107, 94, 184, 0.13)',
-                            }} />
-                            {/* Core circle with STOVE label */}
-                            <div style={{
-                                position: 'absolute',
-                                width: 126.40,
-                                height: 126.40,
-                                borderRadius: '50%',
-                                background: 'rgba(107, 94, 184, 0.05)',
-                                border: '0.80px rgba(107, 94, 184, 0.35) solid',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                            }}>
-                                <span style={{
-                                    color: 'rgba(107, 94, 184, 0.75)',
-                                    fontSize: 10,
-                                    fontFamily: 'Inter, sans-serif',
-                                    fontWeight: 500,
-                                    lineHeight: '15px',
-                                    letterSpacing: 3,
-                                    textTransform: 'uppercase',
-                                }}>STOVE</span>
-                            </div>
+                            <StoveZoneAmbient
+                                isIdle={isIdle}
+                                isDetecting={isDetecting}
+                                gesturePulse={gesturePulse}
+                                glowOuter={palette.glowOuter}
+                                glowMiddle={palette.glowMiddle}
+                                emberColors={[palette.emberA, palette.emberB]}
+                            />
                         </div>
 
                         {/* Divider */}
@@ -710,10 +961,12 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                             flexShrink: 0,
                         }}>
                             {/* BACK button */}
-                            <button
+                            <motion.button
                                 onClick={onPreviousStep}
-                                disabled={stepNumber === 1}
+                                disabled={isFirstStep}
+                                whileTap={isFirstStep ? undefined : { scale: 0.96 }}
                                 style={{
+                                    position: 'relative',
                                     background: palette.backBtnBg,
                                     borderRadius: 999,
                                     border: `0.80px ${palette.backBtnBorder} solid`,
@@ -724,11 +977,21 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     gap: 8,
-                                    cursor: stepNumber === 1 ? 'not-allowed' : 'pointer',
-                                    opacity: stepNumber === 1 ? 0.45 : 1,
+                                    cursor: isFirstStep ? 'not-allowed' : 'pointer',
+                                    opacity: isFirstStep ? 0.45 : 1,
                                     transition: 'opacity 0.2s',
                                 }}
                             >
+                                {/* Ring burst each time the step goes back */}
+                                {stepTrack.direction < 0 && stepTrack.changes > 0 && (
+                                    <motion.span
+                                        key={stepTrack.changes}
+                                        initial={{ opacity: 0.85, scale: 1 }}
+                                        animate={{ opacity: 0, scale: 1.3 }}
+                                        transition={{ duration: 0.7, ease: 'easeOut' }}
+                                        style={{ position: 'absolute', inset: -1, borderRadius: 999, border: `2px solid ${palette.chevronColor}`, pointerEvents: 'none' }}
+                                    />
+                                )}
                                 <ChevronLeft
                                     size={16}
                                     color={palette.chevronColor}
@@ -741,13 +1004,44 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                                     fontWeight: 500,
                                     lineHeight: '21px',
                                 }}>BACK</span>
-                            </button>
+                            </motion.button>
 
-                            {/* NEXT button */}
-                            <button
+                            {/* Voice phrases for this screen (only while the mic is listening) */}
+                            <div style={{
+                                flex: 1, minWidth: 0, padding: '0 16px',
+                                textAlign: 'center',
+                                color: palette.secondaryTextDim,
+                                fontSize: 10.40,
+                                fontFamily: 'Inter, sans-serif',
+                                lineHeight: '15.60px',
+                            }}>
+                                {voiceState === 'listening' && (
+                                    <>
+                                        Say{' '}
+                                        {VOICE_PHRASES.map((phrase, i) => (
+                                            <span key={phrase} style={{ whiteSpace: 'nowrap' }}>
+                                                “{phrase}”{i < VOICE_PHRASES.length - 1 ? ' · ' : ''}
+                                            </span>
+                                        ))}
+                                    </>
+                                )}
+                            </div>
+
+                            {/* NEXT button — breathes while idle to invite the next step */}
+                            <motion.button
                                 onClick={onNextStep}
-                                disabled={stepNumber === totalSteps}
+                                disabled={isLastStep}
+                                whileTap={isLastStep ? undefined : { scale: 0.96 }}
+                                animate={{
+                                    boxShadow: ambient && !isLastStep
+                                        ? ['0 0 0 0px rgba(107, 94, 184, 0)', '0 0 0 8px rgba(107, 94, 184, 0.22)', '0 0 0 0px rgba(107, 94, 184, 0)']
+                                        : '0 0 0 0px rgba(107, 94, 184, 0)',
+                                }}
+                                transition={ambient && !isLastStep
+                                    ? { duration: 2.4, repeat: Infinity, ease: 'easeInOut' }
+                                    : { duration: 0.3 }}
                                 style={{
+                                    position: 'relative',
                                     background: '#6B5EB8',
                                     borderRadius: 999,
                                     border: 'none',
@@ -757,11 +1051,21 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                                     paddingRight: 28,
                                     display: 'inline-flex',
                                     alignItems: 'center',
-                                    cursor: stepNumber === totalSteps ? 'not-allowed' : 'pointer',
-                                    opacity: stepNumber === totalSteps ? 0.45 : 1,
+                                    cursor: isLastStep ? 'not-allowed' : 'pointer',
+                                    opacity: isLastStep ? 0.45 : 1,
                                     transition: 'opacity 0.2s',
                                 }}
                             >
+                                {/* Ring burst each time the step advances */}
+                                {stepTrack.direction > 0 && stepTrack.changes > 0 && (
+                                    <motion.span
+                                        key={stepTrack.changes}
+                                        initial={{ opacity: 0.85, scale: 1 }}
+                                        animate={{ opacity: 0, scale: 1.3 }}
+                                        transition={{ duration: 0.7, ease: 'easeOut' }}
+                                        style={{ position: 'absolute', inset: -1, borderRadius: 999, border: '2px solid #6B5EB8', pointerEvents: 'none' }}
+                                    />
+                                )}
                                 <span style={{
                                     color: '#F5F4F0',
                                     fontSize: 14,
@@ -770,7 +1074,7 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                                     lineHeight: '21px',
                                     letterSpacing: 0.70,
                                 }}>NEXT</span>
-                            </button>
+                            </motion.button>
                         </div>
 
                         <div style={PANEL_OVERLAY} />
@@ -786,29 +1090,26 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                             height: '100%',
                             boxSizing: 'border-box',
                         }}>
-                            {/* INGREDIENTS */}
-                            <div>
-                                <div style={{ ...SECTION_LABEL, marginBottom: 14 }}>
+                            {/* INGREDIENTS — rows shrink first, then the list scrolls */}
+                            <div style={{ flex: '0 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                                <div style={{ ...SECTION_LABEL, marginBottom: 10, flexShrink: 0 }}>
                                     INGREDIENTS
                                 </div>
                                 <div style={{
-                                    display: 'grid',
-                                    gridTemplateColumns: 'repeat(3, 1fr)',
-                                    gap: 8,
+                                    flex: '0 1 auto', minHeight: 0,
+                                    overflowY: 'auto',
+                                    scrollbarWidth: 'thin',
+                                    scrollbarColor: `${palette.ingredientSquareBorder} transparent`,
+                                    display: 'flex', flexDirection: 'column', gap: 4,
                                 }}>
-                                    {Array.from({ length: 9 }).map((_, i) => (
-                                        <div key={i} style={{
-                                            aspectRatio: '1',
-                                            background: palette.ingredientSquareBg,
-                                            borderRadius: 14,
-                                            border: `0.80px ${palette.ingredientSquareBorder} solid`,
-                                        }} />
+                                    {recipe.ingredients.map((ing, i) => (
+                                        <IngredientLine key={i} ing={ing} palette={palette} />
                                     ))}
                                 </div>
                             </div>
 
                             {/* UTENSILS */}
-                            <div>
+                            <div style={{ flexShrink: 0 }}>
                                 <div style={{ ...SECTION_LABEL, marginBottom: 8 }}>
                                     UTENSILS
                                 </div>
@@ -841,7 +1142,7 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                             </div>
 
                             {/* STOVE STATUS */}
-                            <div>
+                            <div style={{ flexShrink: 0 }}>
                                 <div style={{ ...SECTION_LABEL, marginBottom: 8 }}>
                                     STOVE STATUS
                                 </div>
@@ -893,22 +1194,25 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                                 </div>
                             </div>
 
-                            {/* Notes box */}
-                            <div style={{
-                                background: palette.notesBg,
-                                borderRadius: 14,
-                                border: `0.80px ${palette.notesBorder} solid`,
-                                padding: '12.80px',
-                                marginTop: 'auto',
-                            }}>
-                                <span style={{
-                                    color: palette.notesText,
-                                    fontSize: 12,
-                                    fontFamily: 'Inter, sans-serif',
-                                    fontWeight: 400,
-                                    lineHeight: '19.50px',
-                                }}>Notes / details placeholder</span>
-                            </div>
+                            {/* Details box — recipe timing */}
+                            {timing && (
+                                <div style={{
+                                    background: palette.notesBg,
+                                    borderRadius: 14,
+                                    border: `0.80px ${palette.notesBorder} solid`,
+                                    padding: '12.80px',
+                                    marginTop: 'auto',
+                                    flexShrink: 0,
+                                }}>
+                                    <span style={{
+                                        color: palette.secondaryText,
+                                        fontSize: 12,
+                                        fontFamily: 'Inter, sans-serif',
+                                        fontWeight: 400,
+                                        lineHeight: '19.50px',
+                                    }}>{timing}</span>
+                                </div>
+                            )}
                         </div>
                         <div style={PANEL_OVERLAY} />
                     </div>

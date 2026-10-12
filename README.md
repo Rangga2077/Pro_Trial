@@ -1,6 +1,6 @@
 # CoCI — Contactless Cooking Interface
 
-**CoCI** is a hands-free, gesture-driven cooking assistant designed for the kitchen environment — where your hands are wet, greasy, or occupied. A ceiling-mounted or countertop camera captures hand gestures; a projector or secondary display presents a step-by-step cooking HUD on the worksurface. No touchscreen, no voice assistant, no internet required during a session.
+**CoCI** is a hands-free, gesture-driven cooking assistant designed for the kitchen environment — where your hands are wet, greasy, or occupied. A ceiling-mounted or countertop camera captures hand gestures; a projector or secondary display presents a step-by-step cooking HUD on the worksurface. No touchscreen and no internet required during a session; optional offline voice commands (English) work alongside the gestures.
 
 ---
 
@@ -108,6 +108,8 @@ python -m uvicorn app.main:app --reload --port 8000
 
 > **API-only mode (no camera required):** set `CV_PIPELINE_ENABLED=false` in `.env`.
 
+> **Voice commands (optional, offline):** download [`vosk-model-small-en-us-0.15`](https://alphacephei.com/vosk/models), unzip it into `backend/app/engines/audio/models/`, and set `VOICE_ENABLED=true`. See [Voice Commands](#voice-commands).
+
 ### 3. Frontend
 
 ```powershell
@@ -180,6 +182,25 @@ The `required_frames` threshold (default `2` frames ≈ 60 ms) determines how ma
 
 ---
 
+## Voice Commands
+
+Optional and fully offline: the backend listens with Vosk (English) and only recognizes the phrases below. The same word can mean different things per screen; the frontend tells the backend which screen is showing.
+
+| Session | Say | Action |
+|---|---|---|
+| 1 — Recipe Menu | "next" / "back" / "okay" | Next recipe / previous recipe / select recipe |
+| 2 — Ingredient Check | "ready" | Start cooking |
+| 2 — Ingredient Check | "back to menu" | Return to carousel |
+| 3 — Cooking HUD | "next step" or "next" / "previous step" or "go back" | Next / previous step |
+| 3 — Cooking HUD | "start timer" / "pause timer" / "reset timer" | Control the task timer |
+| 3 — Cooking HUD | "read step" | Read the current step aloud |
+| 3 — Cooking HUD | "back to menu" | Return to carousel |
+| 2 and 3 | "black" / "white" | Dark theme / light theme |
+
+Setup and tuning: [`docs/HARDWARE_SETUP.md`](docs/HARDWARE_SETUP.md#3b-the-microphone-voice-commands). Settings: `VOICE_*` in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#8-configuration-reference).
+
+---
+
 ## API Reference
 
 ### Recipe endpoints
@@ -206,7 +227,8 @@ The `required_frames` threshold (default `2` frames ≈ 60 ms) determines how ma
 |---|---|---|
 | `ws://localhost:8000/ws/` | Server → Client | `cv_update` (frame + objects + action) |
 | `ws://localhost:8000/ws/` | Server → Client | `llm_response` |
-| `ws://localhost:8000/ws/` | Client → Server | `llm_query` |
+| `ws://localhost:8000/ws/` | Server → Client | `voice_command`, `voice_status` |
+| `ws://localhost:8000/ws/` | Client → Server | `llm_query`, `ui_mode` |
 
 Full message schemas: [`docs/API_Contracts.md`](docs/API_Contracts.md)
 
@@ -256,8 +278,7 @@ Pro_Trial/
 ├── docs/
 │   ├── ARCHITECTURE.md             ← This system's full architecture reference
 │   ├── API_Contracts.md            ← WebSocket + REST message schemas
-│   ├── HARDWARE_SETUP.md           ← Camera + projector setup guide
-│   └── FRONTEND_SESSIONS_GUIDE.md  ← Per-session font / style editing reference
+│   └── HARDWARE_SETUP.md           ← Camera + projector setup guide
 │
 └── README.md                       ← This file
 ```
@@ -309,4 +330,3 @@ npm run lint        # ESLint
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Full system architecture, data flow diagrams, session design |
 | [`docs/API_Contracts.md`](docs/API_Contracts.md) | WebSocket message schemas, REST contract shapes |
 | [`docs/HARDWARE_SETUP.md`](docs/HARDWARE_SETUP.md) | Camera rig, projector alignment, AverMedia setup |
-| [`FRONTEND_SESSIONS_GUIDE.md`](FRONTEND_SESSIONS_GUIDE.md) | Per-session typography, color tokens, and style editing guide |

@@ -153,6 +153,16 @@ An optional `GestureMonitor` logs per-frame anchor and swipe progress to stdout 
 
 Reads and writes recipe JSON files from the directory configured in `RECIPE_DATA_DIR` (default `../data/recipes`). Each recipe file maps directly to the `Recipe` Pydantic schema.
 
+### 3.6 Voice Pipeline (`engines/audio/`, `voice_actions.py`)
+
+Offline, English-only voice commands, enabled with `VOICE_ENABLED=true`.
+
+- **`stt.py`**: `MicrophoneStream` captures 16 kHz mono audio with `sounddevice`. `VoskEngine` runs Vosk restricted to the command phrases (plus `[unk]` for everything else), which keeps false matches low.
+- **`pipeline.py`**: `VoicePipeline` runs recognition in a worker thread (the asyncio loop is never blocked) and broadcasts `voice_command` and `voice_status`. A missing package, model or microphone reports `voice_status: error` instead of crashing.
+- **`services/voice_actions.py`**: `VoiceActionInterpreter` maps a phrase to a final UI action using the table for the current screen (`PHRASES_BY_MODE`). The same table supplies the recognizer grammar. It requires an exact phrase match, a confidence threshold (stricter for one-word phrases) and a per-action cooldown.
+- **Screen awareness**: the frontend sends `ui_mode` whenever the screen changes, so "next" maps to `MENU_NEXT` on the menu and `NEXT_STEP` while cooking. Phrases from other screens return `NO_ACTION`.
+- **Frontend**: navigation actions go through the same `handleAction` as gestures (`useProjectionHud`). `CONFIRM_READY` starts cooking from Ingredient Check; `THEME_DARK` / `THEME_LIGHT` ("black" / "white") set the theme on sessions 2 and 3. The Cooking screen handles the timer actions and `READ_STEP`, which reads the step with the local `speechSynthesis` voices; voice commands are ignored while it speaks.
+
 ---
 
 ## 4. WebSocket Message Protocol
@@ -202,6 +212,15 @@ BACK_TO_MENU | SELECT_RECIPE | NEXT_STEP | PREVIOUS_STEP | NO_ACTION
 { "type": "status", "data": { "message": "Connected" } }
 ```
 
+#### `voice_command` / `voice_status`
+
+```json
+{ "type": "voice_command", "data": { "action": "NEXT_STEP", "transcript": "next step", "confidence": 0.93 } }
+{ "type": "voice_status", "data": { "state": "listening", "message": null } }
+```
+
+See `docs/API_Contracts.md` for the phrase table per screen.
+
 ### Client → Server messages
 
 #### `llm_query`
@@ -209,6 +228,14 @@ BACK_TO_MENU | SELECT_RECIPE | NEXT_STEP | PREVIOUS_STEP | NO_ACTION
 ```json
 { "type": "llm_query", "query": "How do I julienne a carrot?" }
 ```
+
+#### `ui_mode`
+
+```json
+{ "type": "ui_mode", "mode": "cooking" }
+```
+
+Sent on every screen change and reconnect so voice phrases map per screen.
 
 ---
 
@@ -280,12 +307,7 @@ frontend/src/
         ├── RecipeMenu.tsx         ← Mode: menu — carousel recipe picker
         ├── IngredientCheck.tsx    ← Mode: ingredient_check — ingredient scanning HUD
         ├── RecipeHud.tsx          ← Mode: cooking — step-by-step cooking HUD
-        ├── GestureStatusRail.tsx  ← Fixed bottom-left gesture hint overlay
-        ├── UtilityStatusPanel.tsx ← Fixed bottom-right status panel (cooking/check modes)
-        ├── GlassPanel.tsx         ← Reusable dark glass card (used by overlays)
-        ├── CircularTimer.tsx      ← SVG arc timer ring (legacy, kept for ref)
-        ├── ProgressHeader.tsx     ← Progress bar (legacy, kept for ref)
-        └── GlassPanel.tsx         ← Backdrop-blur panel base
+        └── GestureStatusRail.tsx  ← Fixed bottom-left gesture hint overlay
 ```
 
 ### 6.3 Mode State Machine (`useProjectionHud.ts`)
@@ -426,6 +448,13 @@ These must stay in sync. Any new field added to a server message schema must be 
 | `CORS_ORIGINS` | `http://localhost:5173,...` | Allowed CORS origins |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server address |
 | `OLLAMA_MODEL` | `llama3.2` | LLM model name |
+| `VOICE_ENABLED` | `false` | Start the offline voice-command pipeline (needs a microphone and the Vosk model) |
+| `VOICE_MODEL_PATH` | `app/engines/audio/models/vosk-model-small-en-us-0.15` | Unzipped Vosk model folder |
+| `VOICE_DEVICE_INDEX` | system default | Microphone index (`python -c "import sounddevice; print(sounddevice.query_devices())"`) |
+| `VOICE_SAMPLE_RATE` | `16000` | Capture rate in Hz (Vosk models expect 16 kHz) |
+| `VOICE_MIN_CONFIDENCE` | `0.6` | Minimum confidence for multi-word phrases |
+| `VOICE_MIN_CONFIDENCE_SINGLE_WORD` | `0.8` | Stricter minimum for one-word phrases ("next", "okay") |
+| `VOICE_COOLDOWN_SECONDS` | `1.0` | Minimum seconds before the same voice action can fire again |
 
 ### Frontend (`frontend/.env`)
 

@@ -12,9 +12,11 @@ import type { ProjectionHudMode } from '../../hooks/useProjectionHud';
 
 interface EdgePulseProps {
   mode: ProjectionHudMode;
+  /** Glow colour for the session being entered; null disables the pulse. */
+  accent: string | null;
 }
 
-export const EdgePulse: React.FC<EdgePulseProps> = ({ mode }) => {
+export const EdgePulse: React.FC<EdgePulseProps> = ({ mode, accent }) => {
   // "Adjusting state during render" pattern — avoids setState-in-effect.
   const [tracked, setTracked] = useState({ mode, trigger: 0 });
 
@@ -23,20 +25,21 @@ export const EdgePulse: React.FC<EdgePulseProps> = ({ mode }) => {
   }
 
   // Nothing to render until the first mode change.
-  if (tracked.trigger === 0) return null;
+  if (tracked.trigger === 0 || accent === null) return null;
 
   return (
     <motion.div
       key={tracked.trigger}
       initial={{ opacity: 0 }}
       animate={{ opacity: [0, 0.55, 0] }}
-      transition={{ duration: 0.5, ease: 'easeOut', times: [0, 0.25, 1] }}
+      // Short delay so the glow lands on the incoming screen.
+      transition={{ duration: 0.5, delay: 0.12, ease: 'easeOut', times: [0, 0.25, 1] }}
       style={{
         position: 'absolute',
         inset: 0,
         pointerEvents: 'none',
         zIndex: 50,
-        boxShadow: 'inset 0 0 80px 25px rgba(99, 102, 241, 0.35)',
+        boxShadow: `inset 0 0 80px 25px ${accent}`,
         borderRadius: 'inherit',
       }}
     />
