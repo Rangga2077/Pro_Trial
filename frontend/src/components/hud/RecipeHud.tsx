@@ -4,8 +4,11 @@ import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import type { GestureAction, Ingredient, Recipe, VoiceCommandMessage, VoiceState } from '../../types/contracts';
 import type { ThemeMode } from '../../hooks/useProjectionHud';
 import { useIdleActivity } from '../../hooks/useIdleActivity';
+import { playSfx } from '../../audio/sfx';
 import svgPaths from '../svgTimerRings';
+import { tipsForStep } from './cookingTips';
 import { StoveZoneAmbient } from './StoveZoneAmbient';
+import { TipBubble } from './TipBubble';
 import { VoiceStatusIndicator } from './VoiceStatusIndicator';
 
 export interface RecipeHudProps {
@@ -76,6 +79,12 @@ const PALETTES = {
         guideRowFlash: 'rgba(107, 94, 184, 0.26)',
         emberA: '#9B8FD4',
         emberB: '#FF8FA3',
+        bubbleBg: '#FFFFFF',
+        bubbleBorder: 'rgba(107, 94, 184, 0.30)',
+        bubbleShadow: 'rgba(107, 94, 184, 0.20)',
+        bubbleHeading: '#6B5EB8',
+        bubbleText: '#1E1B3A',
+        bubbleFace: '#FFE1C2',
     },
     dark: {
         cardBg: '#181A26',
@@ -123,6 +132,12 @@ const PALETTES = {
         guideRowFlash: 'rgba(155, 143, 212, 0.32)',
         emberA: '#B2A8E0',
         emberB: '#FF8FA3',
+        bubbleBg: '#232637',
+        bubbleBorder: 'rgba(155, 143, 212, 0.34)',
+        bubbleShadow: 'rgba(0, 0, 0, 0.45)',
+        bubbleHeading: '#B2A8E0',
+        bubbleText: '#F1F0F7',
+        bubbleFace: '#FFE1C2',
     },
 };
 
@@ -178,6 +193,9 @@ interface TimerRingProps {
 
 /** Height of the caption row under each ring. Both rings share it, so they shrink equally. */
 const TIMER_CAPTION_ROW = 34;
+
+/** Room for the tip bubble with a two-line tip (8 + 14 + 2 × 18 + 8). */
+const TIP_BUBBLE_SLOT = 66;
 
 function TimerRing({ value, progress, caption, alert = false, valueColor, captionColor, accessory }: TimerRingProps) {
     const ringColor = alert ? '#FF3D5A' : '#6B5EB8';
@@ -441,11 +459,27 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
         return () => clearInterval(id);
     }, [taskRunning]);
 
-    const toggleTask = useCallback(() => setTaskRunning(running => !running), []);
+    // Counts timer start / pause / reset events (click or voice); each one plays a sound.
+    const [timerEvents, setTimerEvents] = useState(0);
+
+    const toggleTask = useCallback(() => {
+        setTaskRunning(running => !running);
+        setTimerEvents(n => n + 1);
+    }, []);
     const resetTask = useCallback(() => {
         setTaskRunning(false);
         setTaskSeconds(0);
+        setTimerEvents(n => n + 1);
     }, []);
+
+    useEffect(() => {
+        if (timerEvents > 0) playSfx('timer');
+    }, [timerEvents]);
+
+    // One sound per step movement, whatever moved it (button, gesture, voice).
+    useEffect(() => {
+        if (stepTrack.changes > 0) playSfx('step');
+    }, [stepTrack.changes]);
 
     /* ── Timer 2: overall cooking time — starts the moment Session 3
      * mounts, runs for as long as the user is cooking, no controls.
@@ -477,6 +511,9 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
         if (!ignored && action === 'RESET_TIMER') {
             setTaskRunning(false);
             setTaskSeconds(0);
+        }
+        if (!ignored && (action === 'START_TIMER' || action === 'PAUSE_TIMER' || action === 'RESET_TIMER')) {
+            setTimerEvents(n => n + 1);
         }
     }
 
@@ -924,6 +961,27 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                                     </div>
                                 </motion.div>
                             </AnimatePresence>
+
+                            {/* Tip bubble — above the stove zone, where pans and hands
+                             * shadow the projection. Fixed height so the pop out/in
+                             * never shifts the layout. */}
+                            <div style={{
+                                height: TIP_BUBBLE_SLOT, marginTop: 12,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}>
+                                <TipBubble
+                                    heading={`TIP · STEP ${stepNumber}`}
+                                    lines={tipsForStep(recipe.instructions[stepNumber - 1], stepNumber - 1)}
+                                    colors={{
+                                        bg: palette.bubbleBg,
+                                        border: palette.bubbleBorder,
+                                        shadow: palette.bubbleShadow,
+                                        heading: palette.bubbleHeading,
+                                        text: palette.bubbleText,
+                                        face: palette.bubbleFace,
+                                    }}
+                                />
+                            </div>
                         </div>
 
                         {/* Divider */}

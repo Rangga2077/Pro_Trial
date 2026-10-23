@@ -1,6 +1,7 @@
 import { createContext } from 'react';
 import type {
     ClientWebSocketMessage,
+    LLMResponseMessage,
     ServerWebSocketMessage,
     VoiceCommandMessage,
     VoiceStatusMessage,
@@ -12,6 +13,8 @@ export interface WebSocketContextType {
     /** Most recent recognized voice command (a new object per command). */
     lastVoiceCommand: VoiceCommandMessage | null;
     voiceStatus: VoiceStatusMessage['data'];
+    /** Jenny (local LLM) replies, oldest first. Kept apart from lastMessage like lastVoiceCommand. */
+    llmHistory: LLMResponseMessage['data'][];
     sendMessage: (message: ClientWebSocketMessage) => void;
 }
 

@@ -43,12 +43,14 @@ export type GestureAction =
     | 'NEXT_STEP'
     | 'PREVIOUS_STEP'
     | 'TOGGLE_THEME'
+    // Session 2 → 3: closed fist or voice "let's cook"
+    | 'CONFIRM_READY'
     // Voice-only actions (never emitted by the gesture interpreter)
     | 'START_TIMER'
     | 'PAUSE_TIMER'
     | 'RESET_TIMER'
     | 'READ_STEP'
-    | 'CONFIRM_READY'
+    | 'CHECK_INGREDIENT'
     | 'THEME_DARK'
     | 'THEME_LIGHT'
     | 'NO_ACTION';

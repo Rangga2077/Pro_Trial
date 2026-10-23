@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { playSfx, preloadSfx, startMusic, stopMusic } from '../audio/sfx';
 import { API_BASE_URL } from '../config';
 import { useWebSocket } from '../context/useWebSocket';
 import type {
@@ -149,6 +150,7 @@ export function useProjectionHud(): ProjectionHudViewModel {
         const selected = recipes[index];
         if (!selected) return;
 
+        playSfx('select');
         setCurrentRecipe(selected);
         setCurrentStepIndex(0);
         setIsAppStarted(true);
@@ -226,6 +228,12 @@ export function useProjectionHud(): ProjectionHudViewModel {
             return;
         }
 
+        // Session 2 → 3: closed fist or voice "let's cook".
+        if (action === 'CONFIRM_READY') {
+            if (!isMenuOpen && isIngredientCheck) startCooking();
+            return;
+        }
+
         // Only advance cooking steps when actually in cooking mode
         if (!currentRecipe || isMenuOpen || isIngredientCheck) return;
 
@@ -250,6 +258,7 @@ export function useProjectionHud(): ProjectionHudViewModel {
         previousStep,
         reset,
         selectRecipe,
+        startCooking,
         toggleTheme,
     ]);
 
@@ -263,6 +272,8 @@ export function useProjectionHud(): ProjectionHudViewModel {
 
     // Voice commands share the gesture action handler. The backend already
     // mapped the phrase for the current screen (see the ui_mode effect below).
+    // Screen-owned actions (CHECK_INGREDIENT, timers, READ_STEP) are no-ops
+    // here; IngredientCheck and RecipeHud handle them.
     useEffect(() => {
         if (!lastVoiceCommand || handledVoiceRef.current === lastVoiceCommand) return;
         handledVoiceRef.current = lastVoiceCommand;
@@ -270,13 +281,8 @@ export function useProjectionHud(): ProjectionHudViewModel {
         // Don't let the read-aloud step trigger commands through the mic.
         if (window.speechSynthesis?.speaking) return;
 
-        const { action } = lastVoiceCommand.data;
-        if (action === 'CONFIRM_READY') {
-            if (!isMenuOpen && isIngredientCheck) startCooking();
-            return;
-        }
-        handleAction(action);
-    }, [handleAction, isIngredientCheck, isMenuOpen, lastVoiceCommand, startCooking]);
+        handleAction(lastVoiceCommand.data.action);
+    }, [handleAction, lastVoiceCommand]);
 
     const selectedRecipe = recipes[selectedRecipeIndex] ?? null;
     const totalSteps = currentRecipe?.instructions.length ?? 0;
@@ -295,6 +301,28 @@ export function useProjectionHud(): ProjectionHudViewModel {
     useEffect(() => {
         if (isConnected) sendMessage({ type: 'ui_mode', mode });
     }, [isConnected, mode, sendMessage]);
+
+    /* ── Sound ─────────────────────────────────────────────────────── */
+    useEffect(() => {
+        preloadSfx();
+        return stopMusic;
+    }, []);
+
+    // One click per carousel move, whatever moved it (arrow, gesture, voice).
+    const soundTrackRef = useRef({ mode, selectedRecipeIndex });
+    useEffect(() => {
+        const previous = soundTrackRef.current;
+        soundTrackRef.current = { mode, selectedRecipeIndex };
+        if (mode === 'menu' && previous.mode === 'menu' && previous.selectedRecipeIndex !== selectedRecipeIndex) {
+            playSfx('carousel');
+        }
+        if (previous.mode !== mode) playSfx('transition');
+    }, [mode, selectedRecipeIndex]);
+
+    // Background music loops from Ingredient Check through Cooking.
+    useEffect(() => {
+        if (mode === 'menu') stopMusic(); else startMusic();
+    }, [mode]);
 
     return {
         mode,

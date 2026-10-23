@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState, type ReactNode } from 
 import { WS_URL } from '../config';
 import type {
     ClientWebSocketMessage,
+    LLMResponseMessage,
     ServerWebSocketMessage,
     VoiceCommandMessage,
     VoiceStatusMessage,
@@ -10,6 +11,9 @@ import { WebSocketContext } from './websocketContext';
 
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 5000;
+
+/** Jenny replies kept for the chat history panel (oldest dropped first). */
+const LLM_HISTORY_LIMIT = 20;
 
 const KNOWN_MESSAGE_TYPES = new Set<ServerWebSocketMessage['type']>([
     'cv_update', 'llm_response', 'status', 'voice_command', 'voice_status',
@@ -21,6 +25,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     // Kept apart from lastMessage so the ~30 ms cv_update stream can't overwrite them.
     const [lastVoiceCommand, setLastVoiceCommand] = useState<VoiceCommandMessage | null>(null);
     const [voiceStatus, setVoiceStatus] = useState<VoiceStatusMessage['data']>({ state: 'disabled' });
+    const [llmHistory, setLlmHistory] = useState<LLMResponseMessage['data'][]>([]);
 
     const wsRef = useRef<WebSocket | null>(null);
 
@@ -71,6 +76,10 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
                 }
                 if (message.type === 'voice_command') setLastVoiceCommand(message);
                 if (message.type === 'voice_status') setVoiceStatus(message.data);
+                if (message.type === 'llm_response') {
+                    const reply = message.data;
+                    setLlmHistory(history => [...history, reply].slice(-LLM_HISTORY_LIMIT));
+                }
                 setLastMessage(message);
             };
         };
@@ -94,7 +103,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     }, []);
 
     return (
-        <WebSocketContext.Provider value={{ isConnected, lastMessage, lastVoiceCommand, voiceStatus, sendMessage }}>
+        <WebSocketContext.Provider value={{ isConnected, lastMessage, lastVoiceCommand, voiceStatus, llmHistory, sendMessage }}>
             {children}
         </WebSocketContext.Provider>
     );

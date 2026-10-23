@@ -94,6 +94,7 @@ CAMERA_INDEX=0
 CAMERA_WIDTH=1280
 CAMERA_HEIGHT=720
 CV_PIPELINE_ENABLED=true
+CV_DETECTION_ENABLED=true
 GESTURE_ACTION_COOLDOWN_SECONDS=0.16
 GESTURE_SWIPE_THRESHOLD=0.06
 RECIPE_DATA_DIR=../data/recipes
@@ -107,6 +108,8 @@ python -m uvicorn app.main:app --reload --port 8000
 ```
 
 > **API-only mode (no camera required):** set `CV_PIPELINE_ENABLED=false` in `.env`.
+
+> **Gestures without object detection:** set `CV_DETECTION_ENABLED=false` in `.env`. The camera, gestures and frame streaming keep running; YOLO is skipped and `cv_update.data.objects` is always empty, so Ingredient Check auto-ticking pauses (ticking by voice or click still works).
 
 > **Voice commands (optional, offline):** download [`vosk-model-small-en-us-0.15`](https://alphacephei.com/vosk/models), unzip it into `backend/app/engines/audio/models/`, and set `VOICE_ENABLED=true`. See [Voice Commands](#voice-commands).
 
@@ -189,7 +192,8 @@ Optional and fully offline: the backend listens with Vosk (English) and only rec
 | Session | Say | Action |
 |---|---|---|
 | 1 — Recipe Menu | "next" / "back" / "okay" | Next recipe / previous recipe / select recipe |
-| 2 — Ingredient Check | "ready" | Start cooking |
+| 2 — Ingredient Check | "ready" | Tick the next ingredient (eggs and soy sauce also tick themselves when the camera sees them) |
+| 2 — Ingredient Check | "let's cook" | Start cooking |
 | 2 — Ingredient Check | "back to menu" | Return to carousel |
 | 3 — Cooking HUD | "next step" or "next" / "previous step" or "go back" | Next / previous step |
 | 3 — Cooking HUD | "start timer" / "pause timer" / "reset timer" | Control the task timer |
