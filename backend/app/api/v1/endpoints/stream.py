@@ -13,6 +13,7 @@ from app.schemas.contracts import (
     StatusMessage,
     UIModeMessage,
 )
+from app.services.gesture_actions import gesture_action_interpreter
 from app.services.realtime import realtime_service
 
 router = APIRouter()
@@ -37,8 +38,11 @@ async def websocket_endpoint(websocket: WebSocket):
             try:
                 payload = json.loads(data)
                 if isinstance(payload, dict) and payload.get("type") == "ui_mode":
-                    # The HUD screen changed: voice phrases map per screen.
-                    voice_pipeline.interpreter.set_mode(UIModeMessage(**payload).mode)
+                    # The HUD screen changed (by gesture, voice or click): voice
+                    # phrases and gestures both map per screen.
+                    mode = UIModeMessage(**payload).mode
+                    voice_pipeline.interpreter.set_mode(mode)
+                    gesture_action_interpreter.set_mode(mode)
                     continue
                 message = LLMQueryMessage(**payload)
             except (json.JSONDecodeError, TypeError, ValidationError):

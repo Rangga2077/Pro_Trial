@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     CAMERA_WIDTH: int = 1280
     CAMERA_HEIGHT: int = 720
     CV_PIPELINE_ENABLED: bool = True
+    # YOLO object detection inside the CV pipeline. False keeps gestures and
+    # frame streaming running but sends no detected objects.
+    CV_DETECTION_ENABLED: bool = True
     GESTURE_ACTION_COOLDOWN_SECONDS: float = 0.16
     GESTURE_SWIPE_THRESHOLD: float = 0.06
     GESTURE_MONITOR_ENABLED: bool = True

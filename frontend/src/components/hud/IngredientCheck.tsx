@@ -1,11 +1,15 @@
 import { motion, useReducedMotion } from 'framer-motion';
-import { Fragment, useEffect, useState } from 'react';
-import { Hand } from 'lucide-react';
+import { Fragment, useEffect, useRef, useState } from 'react';
+import { playSfx } from '../../audio/sfx';
+import { Hand, HandFist } from 'lucide-react';
 import type { GestureAction, Ingredient, Recipe, VoiceCommandMessage, VoiceState } from '../../types/contracts';
 import type { ThemeMode } from '../../hooks/useProjectionHud';
 import { useIdleActivity } from '../../hooks/useIdleActivity';
+import { useIngredientDetections } from '../../hooks/useIngredientDetections';
 import { sharedLayoutIds } from './screenTransitions';
+import { JennyChatPanel } from './JennyChatPanel';
 import { ScanZoneAmbient } from './ScanZoneAmbient';
+import { TipBubble } from './TipBubble';
 import { VoiceStatusIndicator } from './VoiceStatusIndicator';
 
 export type ScanState = 'EMPTY' | 'DETECTING' | 'MATCHED' | 'WRONG ITEM' | 'READY';
@@ -120,6 +124,12 @@ const PALETTES = {
         switcherBg: '#F8FAFC',
         switcherBorder: '#CBD5E1',
         switcherIcon: '#475569',
+        bubbleBg: 'white',
+        bubbleBorder: '#C4B5FD',
+        bubbleShadow: 'rgba(124,58,237,0.18)',
+        bubbleHeading: '#7C3AED',
+        bubbleText: '#0F172A',
+        bubbleFace: '#FFE1C2',
     },
     dark: {
         shellBg: '#0B0F19',
@@ -212,6 +222,12 @@ const PALETTES = {
         switcherBg: 'rgba(255,255,255,0.05)',
         switcherBorder: 'rgba(255,255,255,0.20)',
         switcherIcon: '#F1F4F9',
+        bubbleBg: '#1E2433',
+        bubbleBorder: '#5B4FA8',
+        bubbleShadow: 'rgba(0,0,0,0.45)',
+        bubbleHeading: '#B79CF5',
+        bubbleText: '#F1F4F9',
+        bubbleFace: '#FFE1C2',
     },
 };
 
@@ -302,6 +318,11 @@ function OpenPalmIcon({ color = '#A78BFA' }: { color?: string }) {
     return <Hand size={16} color={color} strokeWidth={1.6} style={{ flexShrink: 0 }} />;
 }
 
+/** Closed-fist icon (start-cooking gesture) */
+function ClosedFistIcon({ color = '#A78BFA' }: { color?: string }) {
+    return <HandFist size={16} color={color} strokeWidth={1.6} style={{ flexShrink: 0 }} />;
+}
+
 /** Thumbs-up icon (theme switcher gesture) */
 function ThumbUpIcon({ color = '#A78BFA' }: { color?: string }) {
     return (
@@ -318,12 +339,21 @@ function ThumbUpIcon({ color = '#A78BFA' }: { color?: string }) {
  *  gesture action so the row can flash when that gesture fires. */
 const GUIDE_ROWS: { id: string; label: string; description: string; Icon: React.FC<{ color?: string }>; action: GestureAction | null }[] = [
     { id: 'scan', label: 'SCAN', description: 'Hold item over detection zone', Icon: PointingUpIcon, action: null },
+    { id: 'cook', label: 'COOK', description: 'Closed fist — start cooking', Icon: ClosedFistIcon, action: 'CONFIRM_READY' },
     { id: 'back', label: 'BACK', description: 'Open palm — return to recipe menu', Icon: OpenPalmIcon, action: 'BACK_TO_MENU' },
     { id: 'theme', label: 'THEME', description: 'Thumbs up — switch light/dark', Icon: ThumbUpIcon, action: 'TOGGLE_THEME' },
 ];
 
 /** How long each Gesture Guide row stays highlighted while the screen is idle. */
 const ATTRACT_STEP_MS = 2400;
+
+/** Encouraging lines the tip bubble cycles through while ingredients are gathered. */
+const PREP_LINES = [
+    'Take your time.',
+    'Prepare your ingredients.',
+    'No need to rush.',
+    'Lack ingredients? You can ask our Jenny for other items.',
+];
 
 /** Mic / sound-wave bars icon */
 function MicBarsIcon({ color = '#C4B5FD' }: { color?: string }) {
@@ -516,6 +546,62 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
             return next;
         });
     };
+
+    /* ── Camera auto-tick ──────────────────────────────────────────
+     * Items the trained detector knows (eggs, soy sauce) tick themselves
+     * once they are held in view. Each item auto-ticks only once, so
+     * unticking it by hand sticks. "Adjusting state during render" pattern.
+     */
+    const detections = useIngredientDetections(ingredients);
+    const trackedSet = new Set(detections.trackedIndexes);
+    const [autoTicked, setAutoTicked] = useState<ReadonlySet<number>>(new Set());
+    const newlyConfirmed = [...detections.confirmed].filter(i => !autoTicked.has(i));
+    if (newlyConfirmed.length > 0) {
+        setAutoTicked(new Set([...autoTicked, ...newlyConfirmed]));
+        setCheckedSet(prev => new Set([...prev, ...newlyConfirmed]));
+    }
+
+    // The item "ready" ticks next: required before optional, and voice-only
+    // items before the ones the camera can confirm.
+    const nextIndex = ingredients
+        .map((ing, i) => ({ i, rank: (isOptional(ing) ? 2 : 0) + (trackedSet.has(i) ? 1 : 0) }))
+        .filter(({ i }) => !checkedSet.has(i))
+        .sort((a, b) => a.rank - b.rank || a.i - b.i)[0]?.i ?? null;
+
+    /* ── Voice: "ready" ticks the next item ────────────────────────
+     * "let's cook" (CONFIRM_READY) is navigation, handled in useProjectionHud.
+     * The command present when this screen opens is not for this screen.
+     */
+    const [seenVoiceCommand, setSeenVoiceCommand] = useState(voiceCommand);
+    if (seenVoiceCommand !== voiceCommand) {
+        setSeenVoiceCommand(voiceCommand);
+        if (voiceCommand?.data.action === 'CHECK_INGREDIENT' && nextIndex !== null) {
+            setCheckedSet(prev => new Set(prev).add(nextIndex));
+        }
+    }
+
+    const nextIngredient = nextIndex !== null ? ingredients[nextIndex] : null;
+    const bubbleHeading = nextIngredient
+        ? `NEXT UP · ${nextIngredient.name}${isOptional(nextIngredient) ? ' (optional)' : ''}`
+        : 'ALL SET!';
+    const bubbleLines = nextIngredient
+        ? [
+            ...(itemsRemaining === 0 ? ['All required items are in. Say “let’s cook” anytime.'] : []),
+            nextIndex !== null && trackedSet.has(nextIndex)
+                ? 'Hold it over the scan zone, or say “ready”.'
+                : 'Say “ready” when it’s on the counter.',
+            ...PREP_LINES,
+        ]
+        : ['Say “let’s cook” to start cooking.', 'Great prep! The wok is waiting.'];
+
+    // One beep per newly ticked ingredient, whether by click, "ready" or the camera.
+    const tickedRef = useRef(checkedSet);
+    useEffect(() => {
+        const added = [...checkedSet].filter(i => !tickedRef.current.has(i)).length;
+        tickedRef.current = checkedSet;
+        for (let n = 0; n < added; n++) window.setTimeout(() => playSfx('tick'), n * 120);
+    }, [checkedSet]);
+
 
     const gestureText = lastAction && lastAction !== 'NO_ACTION'
         ? `LAST GESTURE: ${lastAction.replace(/_/g, ' ')}`
@@ -808,6 +894,8 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                                     display: 'flex', flexDirection: 'column',
                                     alignItems: 'center', justifyContent: 'center',
                                     paddingLeft: 32, paddingRight: 32,
+                                    // Keeps the placeholder centred above the tip bubble.
+                                    paddingBottom: 72,
                                     gap: 0,
                                 }}>
                                     <motion.div
@@ -839,6 +927,26 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                                         Hold each item above the detection area
                                     </span>
                                 </div>
+
+                                {/* Tip bubble — next item to gather + encouraging lines */}
+                                <div style={{
+                                    // Inset clear of the corner brackets.
+                                    position: 'absolute', left: 44, right: 44, bottom: 14,
+                                    display: 'flex', justifyContent: 'center',
+                                }}>
+                                    <TipBubble
+                                        heading={bubbleHeading}
+                                        lines={bubbleLines}
+                                        colors={{
+                                            bg: palette.bubbleBg,
+                                            border: palette.bubbleBorder,
+                                            shadow: palette.bubbleShadow,
+                                            heading: palette.bubbleHeading,
+                                            text: palette.bubbleText,
+                                            face: palette.bubbleFace,
+                                        }}
+                                    />
+                                </div>
                             </div>
 
                             {/* ── START COOKING button — prominent CTA ── */}
@@ -860,8 +968,8 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                                     textTransform: 'uppercase', letterSpacing: 2,
                                 }}>
                                     {itemsRemaining === 0
-                                        ? '✓ ALL CHECKED — START COOKING'
-                                        : `START COOKING  (${matchedCount}/${requiredCount} checked)`}
+                                        ? '✓ ALL CHECKED — LET’S COOK'
+                                        : `LET’S COOK  (${matchedCount}/${requiredCount} checked)`}
                                 </span>
                                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                     <path d="M3 8H13M13 8L9 4M13 8L9 12" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -869,8 +977,8 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                             </button>
                         </div>
 
-                        {/* ──── RIGHT: DETECTED ITEMS + GESTURE GUIDE ─ *
-                         * The guide never shrinks; detected-item rows give up
+                        {/* ──── RIGHT: ASK JENNY + GESTURE GUIDE ────── *
+                         * The guide never shrinks; the Jenny chat history gives up
                          * height first, and the column scrolls only as a last resort.
                          * ─────────────────────────────────────────────── */}
                         <div style={{
@@ -882,34 +990,33 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                             scrollbarColor: `${palette.cardBorder} transparent`,
                         }}>
 
-                            {/* DETECTED ITEMS panel */}
-                            <div style={{
-                                background: palette.detectedPanelBg,
-                                borderRadius: 24,
-                                border: `0.80px ${palette.detectedPanelBorder} solid`,
-                                padding: 16,
-                                display: 'flex',
-                                flexDirection: 'column',
-                                flex: '0 1 auto', minHeight: 0,
-                                overflow: 'hidden',
-                            }}>
-                                <div style={{ ...sectionLabel, marginBottom: 8, flexShrink: 0 }}>DETECTED ITEMS</div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '0 1 auto', minHeight: 0 }}>
-                                    {Array.from({ length: 3 }).map((_, i) => (
-                                        <div key={i} style={{
-                                            height: 44, minHeight: 28, flexShrink: 1,
-                                            background: palette.detectedItemBg,
-                                            borderRadius: 14, border: `0.80px ${palette.detectedItemBorder} solid`,
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        }}>
-                                            {/* placeholder — YOLO will populate this */}
-                                            <span style={{ color: palette.detectedItemText, fontSize: 9, fontFamily: 'Inter, sans-serif', letterSpacing: 1.5 }}>
-                                                WAITING FOR DETECTION
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+                            {/* ASK JENNY panel — chat history + camera-tracked chips */}
+                            <JennyChatPanel
+                                cameraItems={detections.trackedIndexes.map(i => ({
+                                    name: ingredients[i]!.name,
+                                    checked: checkedSet.has(i),
+                                    liveConfidence: detections.liveConfidence.get(i),
+                                }))}
+                                colors={{
+                                    panelBg: palette.detectedPanelBg,
+                                    panelBorder: palette.detectedPanelBorder,
+                                    label: palette.sectionLabel,
+                                    emptyText: palette.placeholderSubText,
+                                    chipBg: palette.rowBg,
+                                    chipBorder: palette.rowBorder,
+                                    chipText: palette.nameText,
+                                    chipLive: palette.amountText,
+                                    chipLiveBorder: palette.tabBorderActive,
+                                    chipChecked: palette.avatarTextChecked,
+                                    chipCheckedBg: palette.rowBgChecked,
+                                    chipCheckedBorder: palette.rowBorderChecked,
+                                    questionText: palette.footerSessionText,
+                                    replyBg: palette.bubbleBg,
+                                    replyBorder: palette.bubbleBorder,
+                                    replyName: palette.bubbleHeading,
+                                    replyText: palette.bubbleText,
+                                }}
+                            />
 
                             {/* GESTURE GUIDE panel */}
                             <div style={{
@@ -993,7 +1100,7 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                                                 <div style={{ width: 8.17, height: 5.25, left: 2.92, top: 5.83, position: 'absolute', outline: `1.17px ${palette.voiceText} solid`, outlineOffset: '-0.58px' }} />
                                             </div>
                                             <span style={{ color: palette.voiceText, fontSize: 10.40, fontFamily: 'Inter, sans-serif', fontWeight: 500, lineHeight: '15.60px', letterSpacing: 0.52 }}>
-                                                SAY &quot;READY&quot; TO CONFIRM
+                                                &quot;READY&quot; PER ITEM · &quot;LET&apos;S COOK&quot;
                                             </span>
                                         </div>
                                         <motion.div
@@ -1022,7 +1129,7 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                                     }}
                                 >
                                     <span style={{ color: palette.proceedText, fontSize: 11.20, fontFamily: 'Inter, sans-serif', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.68 }}>
-                                        START COOKING →
+                                        LET&apos;S COOK →
                                     </span>
                                 </button>
                             </div>

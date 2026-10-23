@@ -135,12 +135,14 @@ type GestureAction =
   | "NEXT_STEP"
   | "PREVIOUS_STEP"
   | "TOGGLE_THEME"
+  // Session 2 → 3: closed fist or voice "let's cook"
+  | "CONFIRM_READY"
   // Voice-only actions (never emitted by the gesture interpreter)
   | "START_TIMER"
   | "PAUSE_TIMER"
   | "RESET_TIMER"
   | "READ_STEP"
-  | "CONFIRM_READY"
+  | "CHECK_INGREDIENT"
   | "THEME_DARK"
   | "THEME_LIGHT"
   | "NO_ACTION";
@@ -163,6 +165,22 @@ interface CVUpdateMessage {
 ```
 
 The backend normally sends `null` instead of `NO_ACTION` when no UI action should fire.
+
+Gesture actions per screen. The gesture interpreter follows the screen through `ui_mode`, so it stays in sync when the screen changes by voice or click.
+
+| Screen (`ui_mode`) | Gesture | `action` |
+|---|---|---|
+| any | Both index fingers up (held), or three fingers | `RESET_APP` (back to the menu) |
+| `menu` | Right / left index finger up | `MENU_NEXT` / `MENU_PREVIOUS` |
+| `menu` | Closed fist | `SELECT_RECIPE` (opens Ingredient Check) |
+| `menu` | Open palm | none |
+| `ingredient_check` | Closed fist | `CONFIRM_READY` (start cooking) |
+| `ingredient_check` | Open palm | `BACK_TO_MENU` |
+| `ingredient_check` | Thumb up | `TOGGLE_THEME` |
+| `ingredient_check` | Index finger up | none |
+| `cooking` | Right / left index finger up | `NEXT_STEP` / `PREVIOUS_STEP` |
+| `cooking` | Closed fist or open palm | `BACK_TO_MENU` |
+| `cooking` | Thumb up | `TOGGLE_THEME` |
 
 ### `llm_response`
 
@@ -205,7 +223,8 @@ interface VoiceCommandMessage {
 | Screen (`ui_mode`) | Phrase | `action` |
 |---|---|---|
 | `menu` | "next" / "back" / "okay" | `MENU_NEXT` / `MENU_PREVIOUS` / `SELECT_RECIPE` |
-| `ingredient_check` | "ready" | `CONFIRM_READY` (start cooking) |
+| `ingredient_check` | "ready" | `CHECK_INGREDIENT` (frontend ticks the next unchecked ingredient) |
+| `ingredient_check` | "let's cook" | `CONFIRM_READY` (start cooking) |
 | `ingredient_check` | "back to menu" | `BACK_TO_MENU` |
 | `ingredient_check`, `cooking` | "black" / "white" | `THEME_DARK` / `THEME_LIGHT` |
 | `cooking` | "next step", "next" | `NEXT_STEP` |

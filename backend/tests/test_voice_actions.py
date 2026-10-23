@@ -28,6 +28,18 @@ def test_same_word_maps_per_screen():
     assert make_interpreter("cooking").interpret("back", 0.95, now=10.0) == GestureAction.NO_ACTION
 
 
+def test_ready_ticks_an_ingredient_and_lets_cook_starts_cooking():
+    interpreter = make_interpreter("ingredient_check")
+    assert interpreter.interpret("ready", 0.95, now=10.0) == GestureAction.CHECK_INGREDIENT
+    assert interpreter.interpret("let's cook", 0.7, now=10.0) == GestureAction.CONFIRM_READY
+    # "ready" is said once per item, so it repeats after the cooldown.
+    assert interpreter.interpret("ready", 0.95, now=10.5) == GestureAction.NO_ACTION
+    assert interpreter.interpret("ready", 0.95, now=11.1) == GestureAction.CHECK_INGREDIENT
+    # Neither phrase means anything on the other screens.
+    assert make_interpreter("menu").interpret("let's cook", 0.95, now=10.0) == GestureAction.NO_ACTION
+    assert make_interpreter("cooking").interpret("ready", 0.95, now=10.0) == GestureAction.NO_ACTION
+
+
 def test_black_and_white_set_the_theme_on_sessions_2_and_3():
     for mode in ("ingredient_check", "cooking"):
         assert make_interpreter(mode).interpret("black", 0.95, now=10.0) == GestureAction.THEME_DARK

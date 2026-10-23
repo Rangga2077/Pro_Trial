@@ -99,6 +99,18 @@ class GestureActionInterpreter:
             sample_seconds=self.monitor_sample_seconds,
         )
 
+    def set_mode(self, mode: str) -> None:
+        """Syncs the screen when it changed by voice or click (the frontend's `ui_mode`).
+
+        primary_active_gesture is kept, so a fist still held after SELECT_RECIPE
+        does not immediately confirm on the next screen.
+        """
+        if mode == self.mode:
+            return
+        self.mode = mode
+        self.swipe_anchors.clear()
+        self._reset_pointer_state()
+
     def interpret(self, gestures: list[RawGesture], now: float | None = None) -> GestureAction:
         current_time = now if now is not None else time.monotonic()
 
@@ -218,8 +230,8 @@ class GestureActionInterpreter:
             self.primary_missing_since = None
 
     def _detect_swipe_action(self, gestures: list[RawGesture], current_time: float) -> GestureAction:
-        # Both menu and cooking use instant pointer actions — swipe detection not used for these modes.
-        if self.mode in ("cooking", "menu"):
+        # All screens use instant pointer actions — swipe detection not used for these modes.
+        if self.mode in ("menu", "ingredient_check", "cooking"):
             self.swipe_anchors.clear()
             return GestureAction.NO_ACTION
 
@@ -415,20 +427,25 @@ class GestureActionInterpreter:
 
     def _map_primary_gesture(self, gesture: str) -> GestureAction:
         if gesture == "CLOSED_FIST":
+            if self.mode == "menu":
+                # Confirm recipe selection — advance to ingredient check (S2)
+                self.mode = "ingredient_check"
+                self._reset_pointer_state()
+                return GestureAction.SELECT_RECIPE
+            if self.mode == "ingredient_check":
+                # Ingredients ready — start cooking (S3)
+                self.mode = "cooking"
+                self._reset_pointer_state()
+                return GestureAction.CONFIRM_READY
             if self.mode == "cooking":
-                # In cooking (S3) or ingredient check (S2) — go back to menu
+                # In cooking (S3) — go back to menu
                 self.mode = "menu"
                 self._reset_pointer_state()
                 return GestureAction.BACK_TO_MENU
-            if self.mode == "menu":
-                # Confirm recipe selection — advance to ingredient check (S2)
-                self.mode = "cooking"
-                self._reset_pointer_state()
-                return GestureAction.SELECT_RECIPE
             return GestureAction.NO_ACTION
 
         if gesture in {"FIVE_FINGERS", "OPEN_PALM"}:
-            if self.mode == "cooking":
+            if self.mode in ("ingredient_check", "cooking"):
                 # Open palm in S2 / S3 — return to recipe menu
                 self.mode = "menu"
                 self._reset_pointer_state()
@@ -443,7 +460,7 @@ class GestureActionInterpreter:
 
         if gesture == "THUMB_UP":
             # Session 2 / 3 only — thumbs up flips the light/dark theme switcher.
-            if self.mode == "cooking":
+            if self.mode in ("ingredient_check", "cooking"):
                 return GestureAction.TOGGLE_THEME
             return GestureAction.NO_ACTION
 
