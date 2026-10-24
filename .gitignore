@@ -10,6 +10,7 @@ venv/
 # Weights / ML Models
 *.pt
 *.task
+backend/app/engines/audio/models/
 
 # OS
 .DS_Store
@@ -17,3 +18,18 @@ Thumbs.db
 
 # AGENTS
 AGENTS.md
+
+# Dataset & Training Runs
+data/
+runs/
+
+# Temporary / Scratch Files
+scrapper
+auto_label
+implementation_plan*
+pytest-cache-files-*/
+
+# Unused Repositories
+Changecirclecolor/
+Sessioningcheck/
+Userwelcomepagewithmenu/

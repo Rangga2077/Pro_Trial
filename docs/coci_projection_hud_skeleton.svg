@@ -1,0 +1,150 @@
+<svg width="1366" height="768" viewBox="0 0 1366 768" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="vignette" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(683 384) rotate(90) scale(490 820)">
+      <stop stop-color="#06111B" stop-opacity="0.35"/>
+      <stop offset="0.62" stop-color="#03070B" stop-opacity="0.78"/>
+      <stop offset="1" stop-color="#000000"/>
+    </radialGradient>
+    <linearGradient id="cyanPurple" x1="0" y1="0" x2="1" y2="0">
+      <stop stop-color="#3EF7FF"/>
+      <stop offset="0.62" stop-color="#42E8FF"/>
+      <stop offset="1" stop-color="#B447FF"/>
+    </linearGradient>
+    <filter id="cyanGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.243 0 0 0 0 0.969 0 0 0 0 1 0 0 0 0.8 0"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="purpleGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.706 0 0 0 0 0.278 0 0 0 0 1 0 0 0 0.8 0"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <style>
+      .label { font-family: Arial, Helvetica, sans-serif; font-size: 14px; font-weight: 700; letter-spacing: 0; fill: #7DFBFF; }
+      .tiny { font-family: Arial, Helvetica, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0; fill: #A9BBC8; }
+      .body { font-family: Arial, Helvetica, sans-serif; font-size: 21px; font-weight: 500; letter-spacing: 0; fill: #DCEBF2; }
+      .heading { font-family: Arial, Helvetica, sans-serif; font-size: 45px; font-weight: 800; letter-spacing: 0; fill: #7DFBFF; }
+      .step { font-family: Arial, Helvetica, sans-serif; font-size: 30px; font-weight: 800; letter-spacing: 0; fill: #F4FBFF; }
+      .time { font-family: Arial, Helvetica, sans-serif; font-size: 40px; font-weight: 800; letter-spacing: 0; fill: #F4FBFF; }
+      .panel { fill: rgba(8,14,22,0.72); stroke: rgba(125,251,255,0.62); stroke-width: 2; }
+      .mutedStroke { stroke: rgba(255,255,255,0.18); stroke-width: 1; }
+    </style>
+  </defs>
+
+  <rect width="1366" height="768" fill="#03070B"/>
+  <rect width="1366" height="768" fill="url(#vignette)"/>
+
+  <g opacity="0.34">
+    <path d="M0 610 C190 550 330 560 500 600 C720 653 902 612 1130 574 C1240 556 1320 575 1366 594 V768 H0 Z" fill="#101820"/>
+    <rect x="0" y="595" width="1366" height="173" fill="#05080C" opacity="0.6"/>
+  </g>
+
+  <g opacity="0.45">
+    <circle cx="370" cy="116" r="2" fill="#3EF7FF"/>
+    <circle cx="490" cy="76" r="1.5" fill="#3EF7FF"/>
+    <circle cx="870" cy="104" r="2" fill="#B447FF"/>
+    <circle cx="1040" cy="155" r="1.5" fill="#3EF7FF"/>
+    <circle cx="280" cy="490" r="1.5" fill="#B447FF"/>
+    <circle cx="795" cy="622" r="2" fill="#3EF7FF"/>
+    <circle cx="1118" cy="548" r="1.5" fill="#B447FF"/>
+  </g>
+
+  <g id="Left Timer Rail">
+    <text x="58" y="151" class="label">(1)</text>
+    <g transform="translate(152 131)" filter="url(#cyanGlow)">
+      <circle r="75" stroke="rgba(62,247,255,0.28)" stroke-width="4"/>
+      <circle r="63" stroke="rgba(62,247,255,0.65)" stroke-width="3"/>
+      <path d="M0 -75 A75 75 0 1 1 -58 47" stroke="#3EF7FF" stroke-width="9" stroke-linecap="round"/>
+      <text x="-43" y="-22" class="tiny" fill="#7DFBFF">SALMON SEAR</text>
+      <text x="-48" y="23" class="time">01:28</text>
+    </g>
+
+    <text x="58" y="324" class="label" fill="#B447FF">(2)</text>
+    <g transform="translate(152 304)" filter="url(#purpleGlow)">
+      <circle r="75" stroke="rgba(180,71,255,0.26)" stroke-width="4"/>
+      <circle r="63" stroke="rgba(180,71,255,0.58)" stroke-width="3"/>
+      <path d="M0 -75 A75 75 0 1 1 -70 -25" stroke="#B447FF" stroke-width="9" stroke-linecap="round"/>
+      <text x="-56" y="-22" class="tiny" fill="#D89AFF">ASPARAGUS STEAM</text>
+      <text x="-48" y="23" class="time">04:15</text>
+    </g>
+
+    <text x="58" y="497" class="label">(3)</text>
+    <g transform="translate(152 477)" filter="url(#cyanGlow)">
+      <circle r="75" stroke="rgba(62,247,255,0.28)" stroke-width="4"/>
+      <circle r="63" stroke="rgba(62,247,255,0.65)" stroke-width="3"/>
+      <path d="M0 -75 A75 75 0 1 1 -26 70" stroke="#3EF7FF" stroke-width="9" stroke-linecap="round"/>
+      <text x="-57" y="-22" class="tiny" fill="#7DFBFF">TOTAL COOK TIME</text>
+      <text x="-48" y="23" class="time">12:44</text>
+    </g>
+  </g>
+
+  <g id="Main Recipe Panel" filter="url(#cyanGlow)">
+    <path class="panel" d="M394 66 L1004 106 Q1028 108 1028 132 L1028 584 Q1028 612 1000 616 L398 680 Q374 683 374 658 L374 90 Q374 64 394 66 Z"/>
+    <text x="410" y="118" class="label" fill="#F4FBFF">PROGRESS</text>
+    <text x="950" y="122" class="tiny" fill="#F4FBFF">4/8</text>
+    <rect x="410" y="140" width="540" height="8" rx="4" fill="rgba(255,255,255,0.16)"/>
+    <rect x="410" y="140" width="316" height="8" rx="4" fill="url(#cyanPurple)"/>
+
+    <text x="410" y="218" class="heading">CRISPY SALMON</text>
+    <text x="410" y="267" class="heading">WITH ASPARAGUS</text>
+
+    <rect x="725" y="166" width="235" height="170" rx="10" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.16)"/>
+    <text x="760" y="254" class="tiny">FOOD IMAGE SLOT</text>
+
+    <text x="410" y="352" class="step">STEP 4/8: SEAR SALMON</text>
+    <text x="410" y="408" class="body">Heat 1 tbsp oil in skillet over medium-high heat.</text>
+    <text x="410" y="441" class="body">Place salmon fillets, skin-side down, in hot pan.</text>
+    <text x="410" y="474" class="body">Sear undisturbed for 4-5 minutes until skin is crispy.</text>
+    <text x="410" y="507" class="body">Carefully flip and sear for another 3-4 minutes.</text>
+
+    <rect x="420" y="598" width="116" height="48" rx="9" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.32)"/>
+    <text x="458" y="629" class="label" fill="#F4FBFF">BACK</text>
+    <rect x="840" y="588" width="140" height="50" rx="10" fill="rgba(62,247,255,0.08)" stroke="#3EF7FF"/>
+    <text x="864" y="620" class="label">NEXT STEP</text>
+  </g>
+
+  <g id="Right Utility Panel" filter="url(#cyanGlow)">
+    <path class="panel" d="M1110 116 L1270 126 Q1294 128 1294 152 L1294 610 Q1294 633 1270 632 L1110 620 Q1088 618 1088 594 L1088 140 Q1088 116 1110 116 Z"/>
+    <text x="1130" y="164" class="label" fill="#F4FBFF">UTENSILS</text>
+    <line x1="1118" y1="184" x2="1266" y2="184" class="mutedStroke"/>
+    <text x="1125" y="230" class="tiny">Skillet</text>
+    <text x="1178" y="230" class="tiny">Spatula</text>
+    <text x="1234" y="230" class="tiny">Timer</text>
+    <circle cx="1142" cy="207" r="14" stroke="#3EF7FF" stroke-width="2"/>
+    <path d="M1178 194 L1194 210" stroke="#B447FF" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="1245" cy="207" r="13" stroke="#3EF7FF" stroke-width="2"/>
+
+    <text x="1130" y="289" class="label" fill="#F4FBFF">INGREDIENTS</text>
+    <line x1="1118" y1="310" x2="1266" y2="310" class="mutedStroke"/>
+    <rect x="1126" y="333" width="31" height="18" rx="7" stroke="#FF8A6A" stroke-width="3"/>
+    <rect x="1178" y="326" width="22" height="34" rx="4" stroke="#4DFFB3" stroke-width="3"/>
+    <path d="M1243 325 C1256 342 1248 357 1242 370 C1234 356 1228 341 1243 325Z" stroke="#FFD166" stroke-width="3"/>
+    <text x="1122" y="389" class="tiny">Salmon</text>
+    <text x="1166" y="389" class="tiny">Asparagus</text>
+    <text x="1235" y="389" class="tiny">Oil</text>
+
+    <text x="1130" y="455" class="label" fill="#F4FBFF">STOVE STATUS</text>
+    <line x1="1118" y1="476" x2="1266" y2="476" class="mutedStroke"/>
+    <text x="1130" y="521" class="step" fill="#4DFFB3">ACTIVE</text>
+    <text x="1130" y="568" class="tiny" fill="#F4FBFF">Front Left:</text>
+    <text x="1232" y="568" class="tiny" fill="#FF5A6A">425F</text>
+    <text x="1130" y="596" class="tiny" fill="#F4FBFF">Front Right:</text>
+    <text x="1232" y="596" class="tiny">OFF</text>
+  </g>
+
+  <g id="HUD Overlay">
+    <rect x="32" y="28" width="180" height="36" rx="8" fill="rgba(8,14,22,0.5)" stroke="rgba(62,247,255,0.3)"/>
+    <circle cx="52" cy="46" r="5" fill="#4DFFB3"/>
+    <text x="66" y="51" class="tiny">WEBSOCKET CONNECTED</text>
+
+    <rect x="1048" y="34" width="260" height="38" rx="8" fill="rgba(8,14,22,0.5)" stroke="rgba(180,71,255,0.34)"/>
+    <text x="1066" y="58" class="tiny">LAST GESTURE: RIGHT INDEX / NEXT</text>
+  </g>
+</svg>

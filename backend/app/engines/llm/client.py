@@ -20,4 +20,26 @@ class LLMClient:
                 print(f"LLM Error: {e}")
                 return "I'm sorry, I couldn't process that."
 
+    async def chat(self, messages: list[dict[str, str]], options: dict | None = None,
+                   model: str | None = None) -> str:
+        """One /api/chat call. The model stays loaded for OLLAMA_KEEP_ALIVE between questions."""
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.post(
+                    f"{self.base_url}/api/chat",
+                    json={
+                        "model": model or self.model,
+                        "messages": messages,
+                        "stream": False,
+                        "keep_alive": settings.OLLAMA_KEEP_ALIVE,
+                        "options": options or {},
+                    },
+                    timeout=settings.LLM_TIMEOUT_SECONDS,
+                )
+                response.raise_for_status()
+                return response.json().get("message", {}).get("content", "").strip()
+            except Exception as e:
+                print(f"LLM Error: {e}")
+                return "Sorry, I can't answer right now. Is Ollama running?"
+
 llm_client = LLMClient()

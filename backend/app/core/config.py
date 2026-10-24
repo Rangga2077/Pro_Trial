@@ -14,13 +14,38 @@ class Settings(BaseSettings):
     CAMERA_WIDTH: int = 1280
     CAMERA_HEIGHT: int = 720
     CV_PIPELINE_ENABLED: bool = True
+    # YOLO object detection inside the CV pipeline. False keeps gestures and
+    # frame streaming running but sends no detected objects.
+    CV_DETECTION_ENABLED: bool = True
     GESTURE_ACTION_COOLDOWN_SECONDS: float = 0.16
     GESTURE_SWIPE_THRESHOLD: float = 0.06
     GESTURE_MONITOR_ENABLED: bool = True
     GESTURE_MONITOR_SAMPLE_SECONDS: float = 0.25
 
+    # Voice commands (offline Vosk, English). Off by default so the app and
+    # tests run without a microphone or model download.
+    VOICE_ENABLED: bool = False
+    VOICE_MODEL_PATH: Path = BACKEND_ROOT / "app" / "engines" / "audio" / "models" / "vosk-model-small-en-us-0.15"
+    VOICE_DEVICE_INDEX: int | None = None
+    VOICE_SAMPLE_RATE: int = 16000
+    VOICE_MIN_CONFIDENCE: float = 0.6
+    VOICE_MIN_CONFIDENCE_SINGLE_WORD: float = 0.8
+    VOICE_COOLDOWN_SECONDS: float = 1.0
+
     OLLAMA_BASE_URL: str = "http://localhost:11434"
-    OLLAMA_MODEL: str = "llama3.2"
+    OLLAMA_MODEL: str = "llama3.2:3b"
+    OLLAMA_KEEP_ALIVE: str = "30m"
+    LLM_TIMEOUT_SECONDS: float = 30.0
+
+    # Ask Jenny (session 2): "hello jenny", then one free-speech question,
+    # transcribed by faster-whisper and answered by the local LLM. Needs
+    # VOICE_ENABLED, since it shares the voice microphone.
+    JENNY_ENABLED: bool = True
+    JENNY_LISTEN_SECONDS: float = 6.0
+    JENNY_STT_MODEL: str = "base.en"
+    JENNY_NUM_CTX: int = 2048
+    JENNY_NUM_PREDICT: int = 120
+    JENNY_TEMPERATURE: float = 0.3
     RECIPE_DATA_DIR: Path = PROJECT_ROOT / "data" / "recipes"
     CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
 

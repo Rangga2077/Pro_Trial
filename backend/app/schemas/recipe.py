@@ -20,6 +20,7 @@ class RecipeBase(BaseModel):
     servings: Optional[int] = None
     difficulty: Optional[str] = "Medium" # Easy, Medium, Hard
     cuisine: Optional[str] = "Global"
+    image_url: Optional[str] = None
 
 class RecipeCreate(RecipeBase):
     ingredients: List[Ingredient]

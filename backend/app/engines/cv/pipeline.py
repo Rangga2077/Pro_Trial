@@ -66,8 +66,8 @@ class CVPipeline:
                 continue
             
             try:
-                # 1. Object Detection (ByteTrack)
-                detections = yolo_model.track(frame)
+                # 1. Object Detection (ByteTrack) — switchable with CV_DETECTION_ENABLED
+                detections = yolo_model.track(frame) if settings.CV_DETECTION_ENABLED else []
                 
                 # 2. Gesture Recognition
                 # Using LIVE_STREAM, this returns the immediately available async results

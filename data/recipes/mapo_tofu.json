@@ -7,6 +7,7 @@
     "servings": 3,
     "difficulty": "Medium",
     "cuisine": "Szechuan",
+    "image_url": "/recipe-assets/mapo-tofu.png",
     "ingredients": [
         {
             "name": "Soft Tofu",

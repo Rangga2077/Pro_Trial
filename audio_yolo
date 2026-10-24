@@ -1,0 +1,252 @@
+# YOLO Ingredient Detection, Training Pipeline & Audio Commands Proposal
+
+This proposal outlines the end-to-end architecture and implementation strategy for **Session 2 (Ingredient Check)** YOLO object detection, dataset collection, model training options (local vs. cloud), and a **Voice/Audio Command System**.
+
+---
+
+## 1. YOLO Ingredient Detection in Session 2
+
+### Current State & Workflow
+In Session 2, the app prompts the cook to place required recipe ingredients under the camera/projection zone.
+- `backend/app/engines/cv/yolo.py` loads `yolov10n.pt` and tracks objects via ByteTrack.
+- Detections stream via WebSocket to the frontend inside `CVUpdateMessage`.
+
+```
++------------------+     Bounding Boxes & Labels     +-------------------+
+|  Camera Feed &   |  ============================>  |  Session 2 UI &   |
+| YOLO Track Engine|                                 | Projection Zone   |
++------------------+                                 +-------------------+
+         |                                                     |
+         v                                                     v
+ Detections: [x,y,w,h,                               Check matching recipe
+  label="garlic", conf=0.85]                         ingredients automatically
+```
+
+### Proposed Session 2 Ingredient Matching Engine
+Create `backend/app/services/ingredient_checker.py`:
+1. **Recipe Class Mapping**: Maps detected labels (`"garlic"`, `"chicken_breast"`, `"bell_pepper"`) to the current recipe's `ingredients` array (`ingredient.name` or `ingredient.id`).
+2. **Spatial Zone Verification**: Define a designated **Countertop / Detection Zone** polygon on the frame.
+3. **Temporal Stability Filter**: An ingredient is marked **"Checked" ($\checkmark$)** only if:
+   - The bounding box center resides within the detection zone.
+   - Confidence threshold $\ge 0.60$.
+   - Object persists for $N$ consecutive frames ($\approx 1.5$ seconds) to avoid false flickers.
+4. **UI Feedback**: Visual glow / check animation in `IngredientCheckScreen` when an ingredient is verified.
+
+---
+
+## 2. Dataset Collection & Automated Web Scraping Strategy
+
+Creating custom dataset annotations manually is tedious. We can automate dataset generation using web scraping combined with **Zero-Shot Auto-Labeling (Grounding DINO / Florence-2)**.
+
+```
++----------------------+     Image Downloads     +-----------------------+
+|  Internet Scraping   |  -------------------->  | Zero-Shot Auto-Label  |
+|  (DuckDuckGo/Bing)   |                         | (Grounding DINO)      |
++----------------------+                         +-----------------------+
+                                                             |
+                                                             v
++----------------------+     YOLO Dataset format |  Auto-Generated       |
+| Custom YOLO Model    |  <--------------------  |  Bounding Boxes &     |
+| Training (Local/Cloud)|                        |  Labels (dataset.yaml)|
++----------------------+                         +-----------------------+
+```
+
+### Automated Workflow Step-by-Step
+
+#### Step A: Multi-Keyword Image Scraping Script (`scripts/fetch_ingredient_images.py`)
+Using `icrawler` or `bing-image-downloader` to pull ~100–200 diverse images per ingredient:
+- Query variations: `raw garlic clove`, `peeled garlic`, `chopped garlic`, `chicken breast raw`, `diced chicken breast`, `bell pepper red`, `soy sauce bottle`.
+- Filter out tiny (< 300x300), corrupted, or duplicate images automatically (using perceptual hash `imagehash`).
+
+#### Step B: Zero-Shot Automated Bounding Box Labeling (`scripts/auto_label_dataset.py`)
+Instead of drawing boxes manually:
+- Use **Grounding DINO** or **Florence-2** open-vocabulary detector.
+- Input prompt: `"garlic", "chicken breast", "bell pepper", "soy sauce"`.
+- Script automatically outputs YOLO format `.txt` label files (`class_id x_center y_center width height`) for every scraped image!
+- Optional: Quick inspection & validation via **Roboflow** or **CVAT** to clean up any noisy labels.
+
+#### Step C: Dataset Structure & Augmentation
+Organize into standard Ultralytics YOLO structure:
+```
+data/dataset/
+├── dataset.yaml
+├── images/
+│   ├── train/
+│   └── val/
+└── labels/
+    ├── train/
+    └── val/
+```
+**`dataset.yaml` example:**
+```yaml
+path: data/dataset
+train: images/train
+val: images/val
+names:
+  0: garlic
+  1: chicken_breast
+  2: bell_pepper
+  3: soy_sauce
+```
+
+---
+
+## 3. Model Training Options: Local vs. Cloud
+
+| Criteria | Option A: Local Training | Option B: Cloud Training (Colab / Kaggle) |
+|---|---|---|
+| **Hardware** | NVIDIA GPU (RTX 2060/3060/4060+) | Free NVIDIA T4 / P100 (Google Colab / Kaggle) |
+| **Setup Time** | Quick (if CUDA/PyTorch already installed) | Zero local setup (Runs in browser notebook) |
+| **Speed** | Fast (depends on local GPU) | Extremely Fast (T4/A100 hardware) |
+| **Cost** | \$0 (uses existing GPU) | \$0 (Free Tier) or \$10/mo for Colab Pro |
+| **Dataset Upload** | No upload needed (files local) | Upload dataset zip to Google Drive / Roboflow |
+| **Best For** | Daily iterations & private datasets | Low-spec local PC or maximum GPU acceleration |
+
+### Option A: Local Training Guide
+Run directly from terminal inside `backend/`:
+```powershell
+# 1. Activate virtual environment
+.\venv\Scripts\Activate
+
+# 2. Install Ultralytics with CUDA support
+pip install ultralytics torch torchvision --index-url https://download.pytorch.org/whl/cu121
+
+# 3. Start YOLO training (e.g. YOLOv10n or YOLOv11n)
+yolo detect train data=data/dataset/dataset.yaml model=yolov10n.pt epochs=100 imgsz=640 batch=16 device=0 project=data/runs name=ingredient_model
+
+# 4. Copy trained best.pt model to app weights
+cp data/runs/ingredient_model/weights/best.pt app/engines/cv/weights/custom_ingredients.pt
+```
+
+### Option B: Cloud Training Guide (Google Colab / Roboflow)
+1. Export dataset from local or Roboflow as YOLOv8/v10 format.
+2. Open Google Colab notebook (GPU T4 enabled).
+3. Run training script in Colab:
+```python
+!pip install ultralytics
+from ultralytics import YOLO
+
+# Load pre-trained model
+model = YOLO('yolov10n.pt')
+
+# Train model
+results = model.train(data='dataset.yaml', epochs=100, imgsz=640, batch=16, device=0)
+
+# Export model
+model.export(format='onnx')  # Optional ONNX export for ultra-fast inference
+```
+4. Download `best.pt` from Google Drive and place it in `backend/app/engines/cv/weights/custom_ingredients.pt`. Update `settings.YOLO_MODEL_PATH` in `config.py`.
+
+---
+
+## 4. Audio Command / Voice Control Feature Proposal
+
+Adding hands-free voice commands is crucial for cooking when the user's hands are busy, wet, or messy.
+
+```
++-----------------------+    Speech Recognition    +--------------------------+
+| Microphones / Browser |  =====================>  | Voice Action Interpreter |
+| Audio Input           |                          | (Intent & Slot Parser)   |
++-----------------------+                          +--------------------------+
+                                                                |
+                                                                v
++-----------------------+     WebSocket Broadcast   +--------------------------+
+|  Frontend UI Action   |  <=====================  | CV/Voice Action Payload  |
+|  (Next/Prev/Timer)    |                          | (ActionMessage)          |
++-----------------------+                          +--------------------------+
+```
+
+### Supported Voice Commands
+
+| Action Category | Voice Phrases (English / Indonesian) | Triggered Action |
+|---|---|---|
+| **Recipe Navigation** | "Next step", "Lanjut", "Step berikutnya" | `NEXT_STEP` |
+| **Recipe Navigation** | "Previous step", "Kembali", "Step sebelumnya" | `PREV_STEP` |
+| **Timer Control** | "Start timer", "Mulai timer" | `START_TIMER` |
+| **Timer Control** | "Pause timer", "Hentikan timer" | `PAUSE_TIMER` |
+| **Timer Control** | "Reset timer" | `RESET_TIMER` |
+| **Session Control** | "Read step", "Baca step" | `TTS_READ_STEP` |
+| **Session Control** | "Back to menu", "Menu utama" | `NAVIGATE_MENU` |
+
+---
+
+### Implementation Architecture Options
+
+#### Option 1: Web Speech API (Browser / Electron Client-Side) — *Recommended for Fast Setup*
+- **Mechanism**: Use browser's native `webkitSpeechRecognition` API in React (`frontend/src/context/VoiceProvider.tsx`).
+- **Pros**: Zero backend GPU/CPU overhead, instant real-time transcription, multi-language support (EN, ID), works inside Electron browser window out of the box.
+- **Flow**:
+  1. `SpeechRecognition` runs continuously or when toggled.
+  2. Listens to speech transcript. Matches keywords ("next step", "pause timer").
+  3. Sends `VoiceCommandMessage` via existing WebSocket provider to backend or directly triggers frontend state.
+
+#### Option 2: Backend Offline Speech Recognition (Vosk / Faster-Whisper) — *Recommended for 100% Offline Local Operation*
+- **Mechanism**: Microphone audio captured via `pyaudio` or WebRTC audio stream, passed to local **Vosk** or **Faster-Whisper** engine in `backend/app/engines/audio/stt.py`.
+- **Pros**: 100% local, no internet connection required, high privacy.
+- **Flow**:
+  1. Create `backend/app/engines/audio/stt.py` using `vosk` (lightweight, ~50MB model, CPU efficient).
+  2. `VoiceActionInterpreter` in `backend/app/services/voice_actions.py` parses intent and converts to `ActionMessage`.
+  3. Broadcasts `CVUpdateMessage` or `ActionMessage` over WebSocket so UI responds identically to gesture triggers!
+
+---
+
+## 5. Proposed Component & File Changes
+
+```
+CoCI Project Root
+├── backend/
+│   ├── app/
+│   │   ├── api/v1/endpoints/audio.py        # Voice control endpoints (optional)
+│   │   ├── core/config.py                   # Add YOLO_MODEL_NAME & VOICE_ENABLED settings
+│   │   ├── engines/
+│   │   │   ├── audio/                       # [NEW] Voice STT & Intent parser engine
+│   │   │   │   ├── stt.py
+│   │   │   │   └── intent.py
+│   │   │   └── cv/
+│   │   │       ├── yolo.py                  # Custom ingredient model loader
+│   │   │       └── pipeline.py              # Extended zone & ingredient matching
+│   │   └── services/
+│   │       ├── ingredient_checker.py        # [NEW] Matching detections to recipe ingredients
+│   │       └── voice_actions.py             # [NEW] Voice intent to ActionMessage mapper
+│   └── scripts/
+│       ├── fetch_ingredient_images.py       # [NEW] Web image scraper for ingredients
+│       ├── auto_label_dataset.py            # [NEW] Zero-shot Grounding DINO auto-labeler
+│       └── train_yolo.py                    # [NEW] One-click local training script
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── hud/
+│   │   │   │   ├── VoiceStatusIndicator.tsx # [NEW] HUD voice indicator (mic status/waveform)
+│   │   │   │   └── IngredientCheckScreen.tsx# Zone overlay & ingredient checklist animation
+│   │   └── context/
+│   │       └── VoiceProvider.tsx            # [NEW] Web Speech API / Audio handler
+└── data/
+    └── dataset/                             # Custom ingredient training dataset directory
+```
+
+---
+
+## 6. Recommended Action Plan & Next Steps
+
+1. **Step 1 — Dataset & Scraping Setup**:
+   - Write `scripts/fetch_ingredient_images.py` to scrape ingredient images for target recipes (e.g. Kung Pao Chicken: chicken breast, garlic, bell pepper, peanuts, chili).
+   - Auto-label using Grounding DINO / Florence-2 script to build initial 5-class dataset.
+
+2. **Step 2 — Model Training**:
+   - Train `yolov10n` or `yolov11n` model (Local GPU or Colab notebook) for 50–100 epochs.
+   - Replace default `yolov10n.pt` with custom `custom_ingredients.pt`.
+
+3. **Step 3 — Ingredient Checker Service**:
+   - Implement `backend/app/services/ingredient_checker.py` to auto-check recipe items when detected in countertop ROI zone.
+
+4. **Step 4 — Voice Control Feature**:
+   - Implement client-side `VoiceProvider` (Web Speech API) + HUD `VoiceStatusIndicator` for hands-free navigation.
+
+---
+
+## User Decision & Feedback Required
+
+> [!IMPORTANT]
+> **Key Decisions to Confirm:**
+> 1. **Training Preference**: Would you like to set up **Local training** (using your local GPU) or **Cloud training** (Google Colab notebook with free T4 GPU)?
+> 2. **Voice Recognition Strategy**: Do you prefer **Web Speech API** (frontend browser speech, zero CPU strain, instant setup) or **Offline Backend Vosk/Whisper** (100% local, no internet needed)?

@@ -1,130 +1,339 @@
-# CoCI Project - Hardware-Free Testing Guide
+# CoCI — Contactless Cooking Interface
 
-CoCI is a local interactive cooking prototype. The backend captures camera frames, runs CV/gesture processing, converts noisy raw gestures into action events, and streams updates to an Electron React frontend.
+**CoCI** is a hands-free, gesture-driven cooking assistant designed for the kitchen environment — where your hands are wet, greasy, or occupied. A ceiling-mounted or countertop camera captures hand gestures; a projector or secondary display presents a step-by-step cooking HUD on the worksurface. No touchscreen and no internet required during a session; optional offline voice commands (English) work alongside the gestures.
 
-## Current Architecture
+---
+
+## What It Does
+
+```
+┌──────────┐    gestures     ┌──────────────┐    projection
+│  Camera  │ ─────────────► │  CoCI System │ ─────────────► worksurface / monitor
+└──────────┘                 └──────────────┘
+                  ▲                  │
+            (YOLOv10 +               │  ingredient
+             MediaPipe)              ▼  detection
+                             ┌──────────────┐
+                             │  Recipe HUD  │
+                             │  S1 · S2 · S3│
+                             └──────────────┘
+```
+
+1. **Browse** — Select a recipe from a carousel interface by swiping with your index finger.
+2. **Check** — Hold each ingredient above the camera zone; the system identifies it using YOLOv10 object detection.
+3. **Cook** — Follow step-by-step instructions with visual timers, stove-status indicators, and gesture navigation — no touching required.
+
+---
+
+## Three-Session Flow
+
+| Session | Mode | What the user sees |
+|---|---|---|
+| **S1 — Menu** | `menu` | Epic-style carousel. Cards fan out. Center card shows recipe details + START COOKING button. Swipe left/right to browse. |
+| **S2 — Ingredient Check** | `ingredient_check` | Light-theme three-column HUD. Left: ingredient checklist. Center: camera/YOLO detection zone. Right: detected items + gesture guide. |
+| **S3 — Cooking HUD** | `cooking` | Light cream card on dark background. Left: circular timer rings. Center: current step instruction + stove visualization. Right: ingredient grid, stove status. |
+
+---
+
+## Technology Stack
 
 ### Backend
-- FastAPI app entry point: `backend/app/main.py`
-- REST API prefix: `http://localhost:8000/api/v1`
-- WebSocket route: `ws://localhost:8000/ws/`
-- Recipe data: `data/recipes`
-- Realtime connection service: `backend/app/services/realtime.py`
-- Gesture action interpreter: `backend/app/services/gesture_actions.py`
-- Recipe file store: `backend/app/services/recipe_loader.py`
+| Component | Technology |
+|---|---|
+| API server | Python · FastAPI |
+| Object detection | YOLOv10n + ByteTrack (Ultralytics) |
+| Gesture recognition | MediaPipe GestureRecognizer (LIVE_STREAM) |
+| Camera capture | OpenCV + ThreadedCamera (background thread) |
+| Real-time transport | WebSocket (`ws://localhost:8000/ws/`) |
+| Recipe storage | JSON files (`data/recipes/`) |
+| Optional LLM | Ollama (`llama3.2:3b`) |
 
 ### Frontend
-- React/Vite source: `frontend/src`
-- Electron main/preload source: `frontend/electron`
-- Frontend API config: `frontend/src/config.ts`
-- Shared TypeScript contracts: `frontend/src/types/contracts.ts`
+| Component | Technology |
+|---|---|
+| UI framework | React 18 + TypeScript |
+| Build tool | Vite |
+| Desktop shell | Electron (fullscreen projection support) |
+| Animation | Framer Motion |
+| Styling | Tailwind CSS (menu) + inline styles (S2/S3, Figma pixel-accurate) |
 
-### Data Flow
-1. `CVPipeline` reads frames from the configured camera.
-2. YOLO produces object detections.
-3. MediaPipe produces raw hand gestures.
-4. The backend gesture interpreter converts raw gestures into action events such as `START_APP`, `MENU_NEXT`, or `SELECT_RECIPE`.
-5. The realtime service broadcasts `cv_update` messages to the frontend.
-6. React consumes final action events instead of interpreting raw model gestures.
+---
 
 ## Prerequisites
 
 - Python 3.8+
 - Node.js 18+ and npm
-- Git
-- Webcam
-- Optional for LLM features: Ollama with `llama3.2`
+- Webcam (index `0` by default)
+- Projector or secondary display (optional for development)
+- [Ollama](https://ollama.com/) with `llama3.2:3b` — optional, only needed for Ask Jenny (in-session LLM cooking advice)
 
-## Configuration
+---
 
-Backend settings are read from `backend/.env` when present.
+## Quick Start
 
-```env
-CAMERA_INDEX=0
-CAMERA_WIDTH=1280
-CAMERA_HEIGHT=720
-CV_PIPELINE_ENABLED=true
-GESTURE_ACTION_COOLDOWN_SECONDS=0.16
-GESTURE_SWIPE_THRESHOLD=0.06
-GESTURE_MONITOR_ENABLED=true
-GESTURE_MONITOR_SAMPLE_SECONDS=0.25
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.2
-RECIPE_DATA_DIR=../data/recipes
-CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+### 1. Clone and configure
+
+```bash
+git clone <repo-url>
+cd Pro_Trial
 ```
 
-Frontend settings use Vite environment variables.
-
-```env
-VITE_API_BASE_URL=http://localhost:8000
-VITE_WS_URL=ws://localhost:8000/ws/
-```
-
-## Backend Setup
+### 2. Backend
 
 ```powershell
 cd backend
 python -m venv venv
 .\venv\Scripts\Activate
 pip install -r requirements.txt
+```
+
+Create `backend/.env` (optional — all values have defaults):
+
+```env
+CAMERA_INDEX=0
+CAMERA_WIDTH=1280
+CAMERA_HEIGHT=720
+CV_PIPELINE_ENABLED=true
+CV_DETECTION_ENABLED=true
+GESTURE_ACTION_COOLDOWN_SECONDS=0.16
+GESTURE_SWIPE_THRESHOLD=0.06
+RECIPE_DATA_DIR=../data/recipes
+CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+```
+
+Start the server:
+
+```powershell
 python -m uvicorn app.main:app --reload --port 8000
 ```
 
-The CV pipeline starts by default. For API-only development or tests, set `CV_PIPELINE_ENABLED=false`.
+> **API-only mode (no camera required):** set `CV_PIPELINE_ENABLED=false` in `.env`.
 
-## Frontend Setup
+> **Gestures without object detection:** set `CV_DETECTION_ENABLED=false` in `.env`. The camera, gestures and frame streaming keep running; YOLO is skipped and `cv_update.data.objects` is always empty, so Ingredient Check auto-ticking pauses (ticking by voice or click still works).
+
+> **Voice commands (optional, offline):** download [`vosk-model-small-en-us-0.15`](https://alphacephei.com/vosk/models), unzip it into `backend/app/engines/audio/models/`, and set `VOICE_ENABLED=true`. See [Voice Commands](#voice-commands).
+
+### 3. Frontend
 
 ```powershell
 cd frontend
 npm install
+```
+
+Create `frontend/.env` (optional):
+
+```env
+VITE_API_BASE_URL=http://localhost:8000
+VITE_WS_URL=ws://localhost:8000/ws/
+```
+
+Start the Electron window (dev mode with hot-reload):
+
+```powershell
 npm run electron:dev
 ```
 
-This starts the Vite dev server and launches the Electron window.
+Or run in the browser without Electron:
+
+```powershell
+npm run dev
+# Open http://localhost:5173
+```
+
+---
+
+## Gesture Vocabulary
+
+Navigation uses **index finger raise** — point the finger up and hold it still. No swiping or movement is required. The action fires once on detection and will not repeat until the finger is lowered and raised again.
+
+### Session 1 — Recipe Menu (Carousel)
+
+| Hand | Gesture | Action | Notes |
+|---|---|---|---|
+| Right only | Index finger up (`POINTING_UP`) | `MENU_NEXT` — advance one card right | Fire-once per raise; lower then re-raise to navigate again |
+| Left only | Index finger up (`POINTING_UP`) | `MENU_PREVIOUS` — go one card left | Same behaviour |
+| Either | Closed fist (`CLOSED_FIST`) | `SELECT_RECIPE` — confirm and enter ingredient check | Hold ~2 frames (~60 ms) |
+| Both (sustained) | Both index fingers up for ~660 ms | `RESET_APP` — reset to recipe menu | Requires deliberate hold; brief accidental detection is ignored |
+
+### Session 2 — Ingredient Check
+
+| Hand | Gesture | Action |
+|---|---|---|
+| Either | Open palm (`OPEN_PALM`) | `BACK_TO_MENU` — return to carousel |
+
+_(Ingredient scanning is confirmed via the **START COOKING** button or future YOLO-matched detection)_
+
+### Session 3 — Cooking HUD
+
+| Hand | Gesture | Action | Notes |
+|---|---|---|---|
+| Right only | Index finger up | `NEXT_STEP` — advance to next cooking step | Fire-once per raise |
+| Left only | Index finger up | `PREVIOUS_STEP` — go back one step | Fire-once per raise |
+| Either | Open palm | `BACK_TO_MENU` — return to carousel | Hold ~2 frames |
+| Either | Closed fist | `BACK_TO_MENU` — return to carousel | Alternative back gesture |
+
+### Tuning (optional)
+
+Add to `backend/.env` to adjust responsiveness:
+
+```env
+# Seconds the finger must be absent before the action can re-fire (lower = faster repeat)
+GESTURE_ACTION_COOLDOWN_SECONDS=0.20
+```
+
+The `required_frames` threshold (default `2` frames ≈ 60 ms) determines how many consecutive frames a gesture must be held before firing. Raise it in code if accidental triggers occur in noisy lighting.
+
+---
+
+## Voice Commands
+
+Optional and fully offline: the backend listens with Vosk (English) and only recognizes the phrases below. The same word can mean different things per screen; the frontend tells the backend which screen is showing.
+
+| Session | Say | Action |
+|---|---|---|
+| 1 — Recipe Menu | "next" / "back" / "okay" | Next recipe / previous recipe / select recipe |
+| 2 — Ingredient Check | "ready" | Tick the next ingredient (eggs and soy sauce also tick themselves when the camera sees them) |
+| 2 — Ingredient Check | "let's cook" | Start cooking |
+| 2 — Ingredient Check | "hello jenny" | Ask Jenny a question: wait for the pop, then ask freely within 6 s (e.g. "What can I use instead of ham?"). The answer appears in the ASK JENNY panel |
+| 2 — Ingredient Check | "back to menu" | Return to carousel |
+| 3 — Cooking HUD | "next step" or "next" / "previous step" or "go back" | Next / previous step |
+| 3 — Cooking HUD | "start timer" / "pause timer" / "reset timer" | Control the task timer |
+| 3 — Cooking HUD | "read step" | Read the current step aloud |
+| 3 — Cooking HUD | "back to menu" | Return to carousel |
+| 2 and 3 | "black" / "white" | Dark theme / light theme |
+
+Setup and tuning: [`docs/HARDWARE_SETUP.md`](docs/HARDWARE_SETUP.md#3b-the-microphone-voice-commands). Settings: `VOICE_*` in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#8-configuration-reference).
+
+**Ask Jenny** (session 2) records the question from the same microphone, transcribes it locally with faster-whisper (`JENNY_STT_MODEL`, default `base.en`) and answers with the local Ollama model (`OLLAMA_MODEL`, default `llama3.2:3b`; run `ollama pull llama3.2:3b` once). `start_app.bat` starts Ollama automatically if it isn't running. It needs `VOICE_ENABLED=true`; set `JENNY_ENABLED=false` to turn it off. The HUD music drops while Jenny listens.
+
+---
+
+## API Reference
+
+### Recipe endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/recipes/` | List all recipes |
+| `GET` | `/api/v1/recipes/{id}` | Get recipe by ID |
+| `GET` | `/api/v1/recipes/random` | Random recipe |
+| `POST` | `/api/v1/recipes/` | Create recipe |
+| `PUT` | `/api/v1/recipes/{id}` | Update recipe |
+| `DELETE` | `/api/v1/recipes/{id}` | Delete recipe |
+
+### Camera endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/camera/devices` | List available camera devices |
+| `POST` | `/api/v1/camera/select` | Switch active camera index |
+
+### WebSocket
+
+| Endpoint | Direction | Message type |
+|---|---|---|
+| `ws://localhost:8000/ws/` | Server → Client | `cv_update` (frame + objects + action) |
+| `ws://localhost:8000/ws/` | Server → Client | `llm_response` |
+| `ws://localhost:8000/ws/` | Server → Client | `voice_command`, `voice_status`, `jenny_status` |
+| `ws://localhost:8000/ws/` | Client → Server | `llm_query`, `ui_mode` |
+
+Full message schemas: [`docs/API_Contracts.md`](docs/API_Contracts.md)
+
+---
+
+## Project Structure
+
+```
+Pro_Trial/
+├── backend/
+│   ├── app/
+│   │   ├── main.py                 ← FastAPI entry point
+│   │   ├── core/config.py          ← Settings (env-overridable)
+│   │   ├── engines/
+│   │   │   ├── cv/
+│   │   │   │   ├── pipeline.py     ← ThreadedCamera + main CV loop
+│   │   │   │   ├── gesture.py      ← MediaPipe GestureRecognizer
+│   │   │   │   └── yolo.py         ← YOLOv10 + ByteTrack
+│   │   │   └── llm/                ← Ollama client + handlers
+│   │   ├── services/
+│   │   │   ├── realtime.py         ← WebSocket broadcast
+│   │   │   ├── gesture_actions.py  ← Gesture → UI action mapping
+│   │   │   └── recipe_loader.py    ← JSON recipe I/O
+│   │   ├── api/v1/endpoints/       ← REST route handlers
+│   │   └── schemas/contracts.py    ← Pydantic message models
+│   ├── tests/                      ← Pytest smoke tests
+│   └── requirements.txt
+│
+├── frontend/
+│   ├── src/
+│   │   ├── App.tsx                 ← Root component
+│   │   ├── types/contracts.ts      ← TypeScript message types
+│   │   ├── context/                ← WebSocket provider + hook
+│   │   ├── hooks/useProjectionHud.ts ← Mode state machine
+│   │   └── components/hud/
+│   │       ├── ProjectionHud.tsx   ← Mode router
+│   │       ├── RecipeMenu.tsx      ← S1: carousel menu
+│   │       ├── IngredientCheck.tsx ← S2: ingredient scanning
+│   │       └── RecipeHud.tsx       ← S3: cooking HUD
+│   ├── electron/                   ← Electron main + preload
+│   └── index.html                  ← Google Fonts: Cousine, Instrument Sans, Dangrek
+│
+├── data/
+│   ├── recipes/                    ← Recipe JSON files
+│   └── img/                        ← Recipe images (served as /recipe-assets/)
+│
+├── docs/
+│   ├── ARCHITECTURE.md             ← This system's full architecture reference
+│   ├── API_Contracts.md            ← WebSocket + REST message schemas
+│   └── HARDWARE_SETUP.md           ← Camera + projector setup guide
+│
+└── README.md                       ← This file
+```
+
+---
 
 ## Verification
 
-Run frontend checks:
+### Backend tests
+
+```powershell
+backend\venv\Scripts\python.exe -m pytest backend\tests -p no:cacheprovider -v
+```
+
+Covers: recipe CRUD, WebSocket handshake, gesture-action pure logic.  
+Camera-dependent tests require physical hardware and are verified manually.
+
+### Frontend checks
 
 ```powershell
 cd frontend
-npm run build
-npm run lint
+npx tsc --noEmit    # type check
+npm run build       # production bundle
+npm run lint        # ESLint
 ```
 
-Run backend smoke tests:
-
-```powershell
-backend\venv\Scripts\python.exe -m pytest backend\tests -p no:cacheprovider
-```
-
-The `-p no:cacheprovider` flag avoids pytest cache writes in restricted Windows sandbox environments.
-
-## API Overview
-
-Recipe endpoints:
-- `GET /api/v1/recipes/`
-- `GET /api/v1/recipes/random`
-- `GET /api/v1/recipes/{recipe_id}`
-- `POST /api/v1/recipes/`
-- `PUT /api/v1/recipes/{recipe_id}`
-- `DELETE /api/v1/recipes/{recipe_id}`
-
-Camera endpoints:
-- `GET /api/v1/camera/devices`
-- `POST /api/v1/camera/select`
-
-WebSocket endpoint:
-- `ws://localhost:8000/ws/`
-
-See `docs/API_Contracts.md` for message shapes.
+---
 
 ## Troubleshooting
 
-| Issue | Likely Cause | Fix |
-| --- | --- | --- |
-| Frontend disconnected | Backend not running or `VITE_WS_URL` mismatch | Start FastAPI and confirm `ws://localhost:8000/ws/` |
-| No recipes shown | `RECIPE_DATA_DIR` points to an empty folder | Confirm JSON files exist in `data/recipes` |
-| Camera does not open | Webcam busy or wrong index | Close other camera apps or change `CAMERA_INDEX` |
-| LLM response fails | Ollama is not running or model missing | Start Ollama and pull the configured model |
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| "DISCONNECTED" badge in UI | Backend not running or wrong WS URL | Start FastAPI; confirm `VITE_WS_URL=ws://localhost:8000/ws/` |
+| No recipes in carousel | `RECIPE_DATA_DIR` is empty or wrong path | Verify JSON files exist in `data/recipes/` |
+| Camera does not open | Webcam busy or wrong index | Close other camera apps; set `CAMERA_INDEX=1` (or higher) |
+| Gestures not recognised | Camera angle or lighting | Ensure hand is well-lit and fully in frame; check MediaPipe confidence thresholds |
+| Gesture fires too quickly | Cooldown too short | Increase `GESTURE_ACTION_COOLDOWN_SECONDS` in `.env` |
+| Swipe requires too much movement | Threshold too high | Decrease `GESTURE_SWIPE_THRESHOLD` (e.g. `0.04`) |
+| YOLO model missing | First run without internet | Connect to internet once to auto-download `yolov10n.pt` |
+| LLM response fails | Ollama not running or model not pulled | Run `ollama pull llama3.2:3b` and `ollama serve` |
+| Black Electron window | Vite dev server not ready | Wait 3–5 s and refresh; or run `npm run dev` first |
+
+---
+
+## Documentation
+
+| Document | Contents |
+|---|---|
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Full system architecture, data flow diagrams, session design |
+| [`docs/API_Contracts.md`](docs/API_Contracts.md) | WebSocket message schemas, REST contract shapes |
+| [`docs/HARDWARE_SETUP.md`](docs/HARDWARE_SETUP.md) | Camera rig, projector alignment, AverMedia setup |
