@@ -27,7 +27,7 @@ CoCI is a local, hands-free interactive cooking prototype: a camera and micropho
 - Frontend dev server: `http://localhost:5173`
 - Frontend API config: `frontend/src/config.ts` (`VITE_API_BASE_URL`, `VITE_WS_URL`)
 - Backend config: `backend/app/core/config.py`, with optional `backend/.env`
-- One-click launcher: `start_app.bat`. It starts the backend, waits until it answers, then starts Vite + Electron.
+- One-click launcher: `start_app.bat`. It starts Ollama if it isn't running (for Ask Jenny; stopped again on exit only if the launcher started it), starts the backend on `127.0.0.1` (this PC only), waits until it answers, then starts Vite + Electron.
 
 Keep camera, CV, gesture, voice and LLM behaviour backend-owned. Keep projection UI and user workflow rendering frontend-owned.
 
