@@ -19,11 +19,14 @@ const SFX_FILES: Record<SfxName, string> = {
 /** Effects play near full volume; the music sits underneath so effects stay audible. */
 const SFX_VOLUME = 0.9;
 const MUSIC_VOLUME = 0.22;
+/** While Jenny records a question: music nearly off, since it hurts speech recognition. */
+const MUSIC_LISTENING_VOLUME = 0.04;
 const MUSIC_FILE = 'sfx/bgm-happy-ukulele.mp3';
 
 const sfxElements = new Map<SfxName, HTMLAudioElement>();
 let music: HTMLAudioElement | null = null;
 let musicWanted = false;
+let jennyListening = false;
 
 function element(name: SfxName): HTMLAudioElement {
     let audio = sfxElements.get(name);
@@ -53,6 +56,7 @@ function retryAfterFirstInput(): void {
 
 /** Plays one effect. Rapid repeats overlap instead of cutting each other off. */
 export function playSfx(name: SfxName): void {
+    if (jennyListening) return; // keep effects out of Jenny's recording
     const base = element(name);
     const audio = base.paused ? base : (base.cloneNode() as HTMLAudioElement);
     audio.volume = SFX_VOLUME;
@@ -66,9 +70,15 @@ export function startMusic(): void {
     if (!music) {
         music = new Audio(MUSIC_FILE);
         music.loop = true;
-        music.volume = MUSIC_VOLUME;
+        music.volume = jennyListening ? MUSIC_LISTENING_VOLUME : MUSIC_VOLUME;
     }
     if (music.paused) music.play().catch(retryAfterFirstInput);
+}
+
+/** While Jenny records a question: music down and effects muted. */
+export function setJennyListening(listening: boolean): void {
+    jennyListening = listening;
+    if (music) music.volume = listening ? MUSIC_LISTENING_VOLUME : MUSIC_VOLUME;
 }
 
 /** Stops the music and rewinds it for the next session. */

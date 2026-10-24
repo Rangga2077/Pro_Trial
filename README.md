@@ -46,7 +46,7 @@
 | Camera capture | OpenCV + ThreadedCamera (background thread) |
 | Real-time transport | WebSocket (`ws://localhost:8000/ws/`) |
 | Recipe storage | JSON files (`data/recipes/`) |
-| Optional LLM | Ollama (`llama3.2`) |
+| Optional LLM | Ollama (`llama3.2:3b`) |
 
 ### Frontend
 | Component | Technology |
@@ -65,7 +65,7 @@
 - Node.js 18+ and npm
 - Webcam (index `0` by default)
 - Projector or secondary display (optional for development)
-- [Ollama](https://ollama.com/) with `llama3.2` — optional, only needed for in-session LLM cooking advice
+- [Ollama](https://ollama.com/) with `llama3.2:3b` — optional, only needed for Ask Jenny (in-session LLM cooking advice)
 
 ---
 
@@ -194,6 +194,7 @@ Optional and fully offline: the backend listens with Vosk (English) and only rec
 | 1 — Recipe Menu | "next" / "back" / "okay" | Next recipe / previous recipe / select recipe |
 | 2 — Ingredient Check | "ready" | Tick the next ingredient (eggs and soy sauce also tick themselves when the camera sees them) |
 | 2 — Ingredient Check | "let's cook" | Start cooking |
+| 2 — Ingredient Check | "hello jenny" | Ask Jenny a question: wait for the pop, then ask freely within 6 s (e.g. "What can I use instead of ham?"). The answer appears in the ASK JENNY panel |
 | 2 — Ingredient Check | "back to menu" | Return to carousel |
 | 3 — Cooking HUD | "next step" or "next" / "previous step" or "go back" | Next / previous step |
 | 3 — Cooking HUD | "start timer" / "pause timer" / "reset timer" | Control the task timer |
@@ -202,6 +203,8 @@ Optional and fully offline: the backend listens with Vosk (English) and only rec
 | 2 and 3 | "black" / "white" | Dark theme / light theme |
 
 Setup and tuning: [`docs/HARDWARE_SETUP.md`](docs/HARDWARE_SETUP.md#3b-the-microphone-voice-commands). Settings: `VOICE_*` in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#8-configuration-reference).
+
+**Ask Jenny** (session 2) records the question from the same microphone, transcribes it locally with faster-whisper (`JENNY_STT_MODEL`, default `base.en`) and answers with the local Ollama model (`OLLAMA_MODEL`, default `llama3.2:3b`; run `ollama pull llama3.2:3b`). It needs `VOICE_ENABLED=true`; set `JENNY_ENABLED=false` to turn it off. The HUD music drops while Jenny listens.
 
 ---
 
@@ -231,7 +234,7 @@ Setup and tuning: [`docs/HARDWARE_SETUP.md`](docs/HARDWARE_SETUP.md#3b-the-micro
 |---|---|---|
 | `ws://localhost:8000/ws/` | Server → Client | `cv_update` (frame + objects + action) |
 | `ws://localhost:8000/ws/` | Server → Client | `llm_response` |
-| `ws://localhost:8000/ws/` | Server → Client | `voice_command`, `voice_status` |
+| `ws://localhost:8000/ws/` | Server → Client | `voice_command`, `voice_status`, `jenny_status` |
 | `ws://localhost:8000/ws/` | Client → Server | `llm_query`, `ui_mode` |
 
 Full message schemas: [`docs/API_Contracts.md`](docs/API_Contracts.md)
@@ -322,7 +325,7 @@ npm run lint        # ESLint
 | Gesture fires too quickly | Cooldown too short | Increase `GESTURE_ACTION_COOLDOWN_SECONDS` in `.env` |
 | Swipe requires too much movement | Threshold too high | Decrease `GESTURE_SWIPE_THRESHOLD` (e.g. `0.04`) |
 | YOLO model missing | First run without internet | Connect to internet once to auto-download `yolov10n.pt` |
-| LLM response fails | Ollama not running or model not pulled | Run `ollama pull llama3.2` and `ollama serve` |
+| LLM response fails | Ollama not running or model not pulled | Run `ollama pull llama3.2:3b` and `ollama serve` |
 | Black Electron window | Vite dev server not ready | Wait 3–5 s and refresh; or run `npm run dev` first |
 
 ---

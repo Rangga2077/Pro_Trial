@@ -15,6 +15,10 @@ class SpeechEngine(Protocol):
         """Feed 16-bit mono PCM; return (transcript, confidence) when a phrase ends."""
         ...
 
+    def reset(self) -> None:
+        """Forget any partial phrase."""
+        ...
+
 
 class VoskEngine:
     """Vosk recognizer restricted to the command phrases (plus `[unk]` for
@@ -42,6 +46,10 @@ class VoskEngine:
 
         confidence = sum(word.get("conf", 0.0) for word in words) / len(words)
         return text, confidence
+
+    def reset(self) -> None:
+        """Drop any half-heard phrase (after audio was routed elsewhere, e.g. to Jenny)."""
+        self._recognizer.Reset()
 
 
 class MicrophoneStream:

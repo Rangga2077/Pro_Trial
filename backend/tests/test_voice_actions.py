@@ -109,3 +109,60 @@ def test_pipeline_broadcasts_only_recognized_commands():
         {"type": "voice_command", "data": {"action": "READ_STEP", "transcript": "read step", "confidence": 0.912}},
         {"type": "voice_status", "data": {"state": "listening", "message": None}},
     ]
+
+
+def test_ask_jenny_only_works_on_the_ingredient_check():
+    assert make_interpreter("ingredient_check").interpret("hello jenny", 0.95, now=10.0) == GestureAction.ASK_JENNY
+    assert make_interpreter("menu").interpret("hello jenny", 0.95, now=10.0) == GestureAction.NO_ACTION
+    assert make_interpreter("cooking").interpret("hello jenny", 0.95, now=10.0) == GestureAction.NO_ACTION
+
+
+class FakeJenny:
+    def __init__(self, ready: bool = True):
+        self.ready = ready
+        self.listening = 0
+
+    def can_listen(self) -> bool:
+        return self.ready
+
+    async def start_listening(self) -> None:
+        self.listening += 1
+
+
+def make_jenny_pipeline(jenny: FakeJenny) -> VoicePipeline:
+    async def broadcast(message):
+        pass
+
+    return VoicePipeline(interpreter=make_interpreter("ingredient_check"), broadcast=broadcast, jenny=jenny)
+
+
+def test_ask_jenny_switches_the_microphone_to_jenny():
+    jenny = FakeJenny()
+    pipeline = make_jenny_pipeline(jenny)
+
+    asyncio.run(pipeline.handle_transcript("hello jenny", 0.95))
+
+    assert pipeline._capture.is_set()
+    assert jenny.listening == 1
+
+
+def test_ask_jenny_is_ignored_while_jenny_is_busy():
+    jenny = FakeJenny(ready=False)
+    pipeline = make_jenny_pipeline(jenny)
+
+    asyncio.run(pipeline.handle_transcript("hello jenny", 0.95))
+
+    assert not pipeline._capture.is_set()
+    assert jenny.listening == 0
+
+
+def test_capture_returns_the_recording_once_the_window_is_full():
+    pipeline = make_jenny_pipeline(FakeJenny())
+    pipeline._capture_bytes = 10
+    chunk = b"\x01\x02\x03\x04"
+
+    assert pipeline.collect_capture(chunk) is None
+    assert pipeline.collect_capture(chunk) is None
+    assert pipeline.collect_capture(chunk) == (chunk * 3)[:10]
+    # The next recording starts empty.
+    assert pipeline.collect_capture(chunk) is None

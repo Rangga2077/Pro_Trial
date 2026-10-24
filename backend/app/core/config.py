@@ -33,7 +33,19 @@ class Settings(BaseSettings):
     VOICE_COOLDOWN_SECONDS: float = 1.0
 
     OLLAMA_BASE_URL: str = "http://localhost:11434"
-    OLLAMA_MODEL: str = "llama3.2"
+    OLLAMA_MODEL: str = "llama3.2:3b"
+    OLLAMA_KEEP_ALIVE: str = "30m"
+    LLM_TIMEOUT_SECONDS: float = 30.0
+
+    # Ask Jenny (session 2): "hello jenny", then one free-speech question,
+    # transcribed by faster-whisper and answered by the local LLM. Needs
+    # VOICE_ENABLED, since it shares the voice microphone.
+    JENNY_ENABLED: bool = True
+    JENNY_LISTEN_SECONDS: float = 6.0
+    JENNY_STT_MODEL: str = "base.en"
+    JENNY_NUM_CTX: int = 2048
+    JENNY_NUM_PREDICT: int = 120
+    JENNY_TEMPERATURE: float = 0.3
     RECIPE_DATA_DIR: Path = PROJECT_ROOT / "data" / "recipes"
     CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
 

@@ -1,6 +1,7 @@
 import { createContext } from 'react';
 import type {
     ClientWebSocketMessage,
+    JennyStatusMessage,
     LLMResponseMessage,
     ServerWebSocketMessage,
     VoiceCommandMessage,
@@ -15,6 +16,8 @@ export interface WebSocketContextType {
     voiceStatus: VoiceStatusMessage['data'];
     /** Jenny (local LLM) replies, oldest first. Kept apart from lastMessage like lastVoiceCommand. */
     llmHistory: LLMResponseMessage['data'][];
+    /** Ask Jenny state (listening / thinking / idle / unavailable), kept apart from lastMessage. */
+    jennyStatus: JennyStatusMessage['data'];
     sendMessage: (message: ClientWebSocketMessage) => void;
 }
 

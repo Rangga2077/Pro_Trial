@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState, type ReactNode } from 
 import { WS_URL } from '../config';
 import type {
     ClientWebSocketMessage,
+    JennyStatusMessage,
     LLMResponseMessage,
     ServerWebSocketMessage,
     VoiceCommandMessage,
@@ -16,8 +17,10 @@ const RECONNECT_MAX_MS = 5000;
 const LLM_HISTORY_LIMIT = 20;
 
 const KNOWN_MESSAGE_TYPES = new Set<ServerWebSocketMessage['type']>([
-    'cv_update', 'llm_response', 'status', 'voice_command', 'voice_status',
+    'cv_update', 'llm_response', 'status', 'voice_command', 'voice_status', 'jenny_status',
 ]);
+
+const JENNY_OFFLINE: JennyStatusMessage['data'] = { state: 'unavailable' };
 
 export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [isConnected, setIsConnected] = useState(false);
@@ -26,6 +29,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     const [lastVoiceCommand, setLastVoiceCommand] = useState<VoiceCommandMessage | null>(null);
     const [voiceStatus, setVoiceStatus] = useState<VoiceStatusMessage['data']>({ state: 'disabled' });
     const [llmHistory, setLlmHistory] = useState<LLMResponseMessage['data'][]>([]);
+    const [jennyStatus, setJennyStatus] = useState<JennyStatusMessage['data']>(JENNY_OFFLINE);
 
     const wsRef = useRef<WebSocket | null>(null);
 
@@ -52,6 +56,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
                 console.log('WebSocket disconnected, retrying in', retryDelay, 'ms');
                 setIsConnected(false);
                 setVoiceStatus({ state: 'disabled' });
+                setJennyStatus(JENNY_OFFLINE);
 
                 retryTimeout = setTimeout(() => {
                     retryDelay = Math.min(retryDelay * 1.5, RECONNECT_MAX_MS);
@@ -76,6 +81,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
                 }
                 if (message.type === 'voice_command') setLastVoiceCommand(message);
                 if (message.type === 'voice_status') setVoiceStatus(message.data);
+                if (message.type === 'jenny_status') setJennyStatus(message.data);
                 if (message.type === 'llm_response') {
                     const reply = message.data;
                     setLlmHistory(history => [...history, reply].slice(-LLM_HISTORY_LIMIT));
@@ -103,7 +109,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     }, []);
 
     return (
-        <WebSocketContext.Provider value={{ isConnected, lastMessage, lastVoiceCommand, voiceStatus, llmHistory, sendMessage }}>
+        <WebSocketContext.Provider value={{ isConnected, lastMessage, lastVoiceCommand, voiceStatus, llmHistory, jennyStatus, sendMessage }}>
             {children}
         </WebSocketContext.Provider>
     );

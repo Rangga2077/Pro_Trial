@@ -162,6 +162,7 @@ Offline, English-only voice commands, enabled with `VOICE_ENABLED=true`.
 - **`services/voice_actions.py`**: `VoiceActionInterpreter` maps a phrase to a final UI action using the table for the current screen (`PHRASES_BY_MODE`). The same table supplies the recognizer grammar. It requires an exact phrase match, a confidence threshold (stricter for one-word phrases) and a per-action cooldown.
 - **Screen awareness**: the frontend sends `ui_mode` whenever the screen changes, so "next" maps to `MENU_NEXT` on the menu and `NEXT_STEP` while cooking. Phrases from other screens return `NO_ACTION`.
 - **Frontend**: navigation actions go through the same `handleAction` as gestures (`useProjectionHud`). `CONFIRM_READY` ("let's cook") starts cooking from Ingredient Check, and Ingredient Check handles `CHECK_INGREDIENT` ("ready") itself by ticking the next unchecked ingredient; `THEME_DARK` / `THEME_LIGHT` ("black" / "white") set the theme on sessions 2 and 3. The Cooking screen handles the timer actions and `READ_STEP`, which reads the step with the local `speechSynthesis` voices; voice commands are ignored while it speaks.
+- **Ask Jenny** (session 2, `services/jenny.py`, `engines/audio/whisper_stt.py`): "hello jenny" maps to `ASK_JENNY`. `VoicePipeline` then routes the next `JENNY_LISTEN_SECONDS` of the same microphone stream to Jenny instead of Vosk, so the question can't trigger commands. `JennyService` transcribes it with faster-whisper (CPU int8, with a cooking `initial_prompt` and the open recipe's words as `hotwords`), asks Ollama `/api/chat` with the recipe in the system prompt, and broadcasts `jenny_status` (listening → thinking → idle) plus the answer as `llm_response`. The recipe comes from `ui_mode.recipe_id`. The speech model and the LLM warm up when voice starts; if faster-whisper can't load, Jenny reports `unavailable` and voice commands keep working. The frontend (`JennyChatPanel`) plays a pop as the cue to speak and mutes effects and lowers the music while Jenny listens.
 
 ---
 
@@ -212,11 +213,12 @@ BACK_TO_MENU | SELECT_RECIPE | NEXT_STEP | PREVIOUS_STEP | NO_ACTION
 { "type": "status", "data": { "message": "Connected" } }
 ```
 
-#### `voice_command` / `voice_status`
+#### `voice_command` / `voice_status` / `jenny_status`
 
 ```json
 { "type": "voice_command", "data": { "action": "NEXT_STEP", "transcript": "next step", "confidence": 0.93 } }
 { "type": "voice_status", "data": { "state": "listening", "message": null } }
+{ "type": "jenny_status", "data": { "state": "thinking", "transcript": "What can I use instead of ham?", "message": null } }
 ```
 
 See `docs/API_Contracts.md` for the phrase table per screen.
@@ -232,10 +234,10 @@ See `docs/API_Contracts.md` for the phrase table per screen.
 #### `ui_mode`
 
 ```json
-{ "type": "ui_mode", "mode": "cooking" }
+{ "type": "ui_mode", "mode": "ingredient_check", "recipe_id": "fried_rice" }
 ```
 
-Sent on every screen change and reconnect so voice phrases map per screen.
+Sent on every screen or recipe change and on reconnect, so voice phrases map per screen and Jenny knows the open recipe. `llm_query` is answered in a background task, so the receive loop never waits for the LLM.
 
 ---
 
@@ -447,7 +449,13 @@ These must stay in sync. Any new field added to a server message schema must be 
 | `RECIPE_DATA_DIR` | `../data/recipes` | Path to recipe JSON directory |
 | `CORS_ORIGINS` | `http://localhost:5173,...` | Allowed CORS origins |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server address |
-| `OLLAMA_MODEL` | `llama3.2` | LLM model name |
+| `OLLAMA_MODEL` | `llama3.2:3b` | LLM model name |
+| `OLLAMA_KEEP_ALIVE` | `30m` | How long Ollama keeps the model loaded between Jenny questions |
+| `LLM_TIMEOUT_SECONDS` | `30.0` | Timeout for one Jenny answer |
+| `JENNY_ENABLED` | `true` | Ask Jenny in session 2 (needs `VOICE_ENABLED`) |
+| `JENNY_LISTEN_SECONDS` | `6.0` | Recording length after "hello jenny" |
+| `JENNY_STT_MODEL` | `base.en` | faster-whisper model for Jenny questions |
+| `JENNY_NUM_CTX` / `JENNY_NUM_PREDICT` / `JENNY_TEMPERATURE` | `2048` / `120` / `0.3` | Ollama options for Jenny answers |
 | `VOICE_ENABLED` | `false` | Start the offline voice-command pipeline (needs a microphone and the Vosk model) |
 | `VOICE_MODEL_PATH` | `app/engines/audio/models/vosk-model-small-en-us-0.15` | Unzipped Vosk model folder |
 | `VOICE_DEVICE_INDEX` | system default | Microphone index (`python -c "import sounddevice; print(sounddevice.query_devices())"`) |

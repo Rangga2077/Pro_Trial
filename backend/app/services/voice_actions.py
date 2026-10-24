@@ -21,6 +21,8 @@ PHRASES_BY_MODE: dict[str, dict[str, GestureAction]] = {
         # "ready" ticks the next ingredient; "let's cook" starts cooking.
         "ready": GestureAction.CHECK_INGREDIENT,
         "let's cook": GestureAction.CONFIRM_READY,
+        # "hello jenny" records the next few seconds as a question for Jenny.
+        "hello jenny": GestureAction.ASK_JENNY,
         "back to menu": GestureAction.BACK_TO_MENU,
         "black": GestureAction.THEME_DARK,
         "white": GestureAction.THEME_LIGHT,
