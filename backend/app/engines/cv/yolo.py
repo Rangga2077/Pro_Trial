@@ -5,11 +5,18 @@ import os
 from pathlib import Path
 
 class YOLOModel:
-    def __init__(self, model_name="yolov10n.pt"):
+    def __init__(self, model_name="custom_ingredients.pt"):
         # Create strict absolute path
         weights_dir = Path(__file__).parent / "weights"
         weights_dir.mkdir(parents=True, exist_ok=True)
-        self.model_path = str(weights_dir / model_name)
+        
+        custom_path = weights_dir / "custom_ingredients.pt"
+        default_path = weights_dir / "yolov10n.pt"
+
+        if custom_path.exists():
+            self.model_path = str(custom_path)
+        else:
+            self.model_path = str(default_path)
         
         # Auto-download if not found into specific path
         try:

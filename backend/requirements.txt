@@ -8,3 +8,11 @@ pytest
 opencv-python
 ultralytics>=8.3.0
 mediapipe
+icrawler
+imagehash
+ftfy
+regex
+git+https://github.com/openai/CLIP.git
+vosk
+sounddevice
+faster-whisper

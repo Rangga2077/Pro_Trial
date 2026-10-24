@@ -7,6 +7,7 @@
     "servings": 4,
     "difficulty": "Hard",
     "cuisine": "Cantonese",
+    "image_url": "/recipe-assets/sweet-sour-pork.jpg",
     "ingredients": [
         {
             "name": "Pork Loin",

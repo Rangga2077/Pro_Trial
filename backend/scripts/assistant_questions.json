@@ -1,0 +1,12 @@
+[
+    {"id": "q01", "recipe_id": "kung_pao_chicken", "step_index": 3, "question": "What can I use instead of peanuts?"},
+    {"id": "q02", "recipe_id": "kung_pao_chicken", "step_index": 2, "question": "How do I know the chicken is cooked?"},
+    {"id": "q03", "recipe_id": "fried_rice", "step_index": 1, "question": "What does stir-fry mean?"},
+    {"id": "q04", "recipe_id": "fried_rice", "step_index": 1, "question": "What can I use instead of ham?"},
+    {"id": "q05", "recipe_id": "fried_rice", "step_index": 2, "question": "How many grams is a cup of cooked rice?"},
+    {"id": "q06", "recipe_id": "kung_pao_chicken", "step_index": 0, "question": "How many teaspoons are in a tablespoon?"},
+    {"id": "q07", "recipe_id": "dumplings_jiaozi", "step_index": 2, "question": "How do I know the dumplings are done?"},
+    {"id": "q08", "recipe_id": "chow_mein", "step_index": 0, "question": "What does al dente mean?"},
+    {"id": "q09", "recipe_id": "hot_and_sour_soup", "step_index": 3, "question": "What is a cornstarch slurry?"},
+    {"id": "q10", "recipe_id": "spring_rolls", "step_index": 0, "question": "Can I use chicken instead of shrimp?"}
+]

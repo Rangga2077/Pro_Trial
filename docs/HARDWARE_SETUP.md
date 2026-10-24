@@ -46,6 +46,14 @@ You need a camera to "see" the hands.
 - **Mounting**: The camera must be rigidly mounted relative to the projector. If the camera moves, your calibration breaks.
 - **Position**: Ideally mounted directly next to the projector lens, looking at the same area.
 
+## 3b. The Microphone (Voice Commands)
+Voice commands run fully offline (Vosk, English) on the PC.
+- **Type**: a USB conference/boundary mic or a small directional mic placed near the cooking area, pointed at the cook and away from the stove fan.
+- **Model**: download [`vosk-model-small-en-us-0.15`](https://alphacephei.com/vosk/models) (about 40 MB) and unzip it into `backend/app/engines/audio/models/`. The folder is gitignored.
+- **Enable**: set `VOICE_ENABLED=true` in `backend/.env`. If the default mic is wrong, set `VOICE_DEVICE_INDEX` (list devices with `python -c "import sounddevice; print(sounddevice.query_devices())"`).
+- **Tuning**: if background talk triggers commands, raise `VOICE_MIN_CONFIDENCE_SINGLE_WORD` / `VOICE_MIN_CONFIDENCE`; if commands are missed, lower them.
+- The mic pill in the HUD header shows LISTENING, VOICE OFF or MIC ERROR.
+
 ## 4. Wiring Diagram (Exhibition Mode)
 
 ```mermaid

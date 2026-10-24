@@ -1,21 +1,46 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { MonitorCog, X } from 'lucide-react';
 import type { ElectronDisplay } from '../types/electron';
+
+/** The floating trigger fades out after this long without pointer movement. */
+const TRIGGER_IDLE_MS = 3000;
 
 export const DisplaySettings: React.FC = () => {
     const [displays, setDisplays] = useState<ElectronDisplay[]>([]);
     const [isOpen, setIsOpen] = useState(false);
     const [error, setError] = useState<string>('');
+    const [isPointerActive, setIsPointerActive] = useState(true);
+    const [isTriggerHovered, setIsTriggerHovered] = useState(false);
+    const [isTriggerFocused, setIsTriggerFocused] = useState(false);
 
-    // Fetch displays only when the menu opens
+    // Keep the trigger off projected content unless the operator moves the mouse.
     useEffect(() => {
-        if (isOpen && window.electronAPI) {
-            window.electronAPI.getDisplays()
-                .then(disp => setDisplays(disp))
-                .catch(err => {
-                    console.error("Display fetch error:", err);
-                    setError("Failed to fetch displays. Are we in Electron?");
-                });
-        }
+        let timer = window.setTimeout(() => setIsPointerActive(false), TRIGGER_IDLE_MS);
+        const wake = () => {
+            setIsPointerActive(true);
+            window.clearTimeout(timer);
+            timer = window.setTimeout(() => setIsPointerActive(false), TRIGGER_IDLE_MS);
+        };
+        window.addEventListener('pointermove', wake);
+        window.addEventListener('pointerdown', wake);
+        return () => {
+            window.clearTimeout(timer);
+            window.removeEventListener('pointermove', wake);
+            window.removeEventListener('pointerdown', wake);
+        };
+    }, []);
+
+    const isTriggerVisible = isPointerActive || isTriggerHovered || isTriggerFocused;
+
+    useEffect(() => {
+        if (!isOpen || !window.electronAPI) return;
+
+        window.electronAPI.getDisplays()
+            .then(disp => setDisplays(disp))
+            .catch(err => {
+                console.error('Display fetch error:', err);
+                setError('Failed to fetch displays. Are we in Electron?');
+            });
     }, [isOpen]);
 
     const handleSelectDisplay = async (id: number) => {
@@ -25,7 +50,7 @@ export const DisplaySettings: React.FC = () => {
             if (!res.success) {
                 setError(res.error || 'Failed to move window');
             } else {
-                setIsOpen(false); // Close upon success
+                setIsOpen(false);
             }
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : String(err));
@@ -33,21 +58,22 @@ export const DisplaySettings: React.FC = () => {
     };
 
     return (
-        <div className="fixed bottom-4 left-4 z-[999]">
+        <div className="fixed left-9 top-24 z-[999]">
             {isOpen ? (
-                <div className="bg-gray-900 border border-gray-700 shadow-2xl p-4 rounded-2xl w-72 backdrop-blur-xl">
-                    <div className="flex justify-between items-center mb-4 border-b border-gray-700 pb-2">
-                        <h3 className="text-white font-bold tracking-widest text-sm">PROJECTION OUTPUT</h3>
-                        <button 
+                <div className="w-72 rounded-[22px] border border-cyan-300/20 bg-[#0b1220]/95 p-4 shadow-[0_0_40px_rgba(62,247,255,0.14)] backdrop-blur-xl">
+                    <div className="mb-4 flex items-center justify-between border-b border-white/10 pb-2">
+                        <h3 className="text-sm font-bold tracking-widest text-white">PROJECTION OUTPUT</h3>
+                        <button
                             onClick={() => setIsOpen(false)}
-                            className="text-gray-400 hover:text-white transition-colors p-1"
+                            className="rounded-full p-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+                            aria-label="Close projection output settings"
                         >
-                            ✕
+                            <X className="h-4 w-4" />
                         </button>
                     </div>
 
                     {error && (
-                        <div className="mb-3 text-red-400 text-xs font-bold p-2 bg-red-900/30 rounded">
+                        <div className="mb-3 rounded bg-red-900/30 p-2 text-xs font-bold text-red-400">
                             {error}
                         </div>
                     )}
@@ -57,28 +83,34 @@ export const DisplaySettings: React.FC = () => {
                             <button
                                 key={disp.id}
                                 onClick={() => handleSelectDisplay(disp.id)}
-                                className={`w-full flex items-center justify-between p-3 rounded-xl transition-all duration-300 ${disp.isPrimary ? 'bg-gray-800 text-gray-300' : 'bg-blue-600/20 text-blue-300 hover:bg-blue-600/40 border border-blue-500/30'}`}
+                                className={`flex w-full items-center justify-between rounded-xl p-3 transition-all duration-300 ${disp.isPrimary ? 'bg-gray-800 text-gray-300' : 'border border-cyan-300/30 bg-cyan-300/10 text-cyan-100 hover:bg-cyan-300/20'}`}
                             >
-                                <span className="font-bold text-sm">
+                                <span className="text-sm font-bold">
                                     Display {i + 1} {disp.isPrimary && '(Primary)'}
                                 </span>
-                                <span className="text-[10px] text-gray-500 font-mono">
+                                <span className="font-mono text-[10px] text-gray-500">
                                     {disp.size.width}x{disp.size.height}
                                 </span>
                             </button>
                         ))}
                         {displays.length === 0 && !error && (
-                            <p className="text-gray-500 text-xs italic text-center py-4">No displays detected.</p>
+                            <p className="py-4 text-center text-xs italic text-gray-500">No displays detected.</p>
                         )}
                     </div>
                 </div>
             ) : (
-                <button 
+                <button
                     onClick={() => setIsOpen(true)}
-                    className="p-3 bg-gray-800/80 hover:bg-gray-700 text-gray-300 rounded-full shadow-lg backdrop-blur-md border border-gray-600/50 transition-all hover:scale-110"
+                    onPointerEnter={() => setIsTriggerHovered(true)}
+                    onPointerLeave={() => setIsTriggerHovered(false)}
+                    onFocus={() => setIsTriggerFocused(true)}
+                    onBlur={() => setIsTriggerFocused(false)}
+                    style={{ opacity: isTriggerVisible ? 1 : 0, pointerEvents: isTriggerVisible ? 'auto' : 'none' }}
+                    className="rounded-full border border-cyan-300/25 bg-[#0b1220]/80 p-3 text-cyan-100 shadow-lg backdrop-blur-md transition-all duration-300 hover:scale-110 hover:bg-cyan-300/10"
                     title="Projector Settings"
+                    aria-label="Open projector settings"
                 >
-                    📺
+                    <MonitorCog className="h-5 w-5" />
                 </button>
             )}
         </div>
