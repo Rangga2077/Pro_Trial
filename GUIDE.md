@@ -50,6 +50,8 @@ Keep camera, CV, gesture, voice and LLM behaviour backend-owned. Keep projection
 | Voice pipeline | `backend/app/engines/audio/pipeline.py` |
 | Microphone + Vosk engine | `backend/app/engines/audio/stt.py` |
 | LLM | `backend/app/engines/llm/` |
+| Ask Jenny (session 2: "hello jenny" → recorded question → Whisper → LLM) | `backend/app/services/jenny.py` (`JennyService`), `backend/app/engines/audio/whisper_stt.py` (faster-whisper); the mic handoff is in `pipeline.py` |
+| Ask Jenny benchmark (offline, not part of the app) | `backend/scripts/benchmark_assistant.py`, `assistant_questions.json` |
 | Training tools (offline, not part of the app; see `docs/YOLO_TRAINING_GUIDE.md`) | `backend/scripts/ingredient_classes.py` (fixed class list, append-only), `record_ingredient_frames.py`, `auto_label_dataset.py`, `train_yolo.py` |
 
 ### Frontend
@@ -81,9 +83,10 @@ Keep camera, CV, gesture, voice and LLM behaviour backend-owned. Keep projection
   - Navigation actions go through `useProjectionHud.handleAction`. Screen-owned actions are handled in the screen: `CHECK_INGREDIENT` ("ready") in `IngredientCheck.tsx`, the task timer and `READ_STEP` in `RecipeHud.tsx`.
 - **Ingredient auto-tick (session 2):** `frontend/src/hooks/useIngredientDetections.ts` maps `cv_update.data.objects` labels to recipe ingredients by exact name (`DETECTOR_INGREDIENTS`). Only classes the deployed model is trained on belong there; append when `custom_ingredients.pt` gains a class.
   - Voice commands are ignored while `speechSynthesis` is speaking.
-- **WebSocket provider:** `lastVoiceCommand`, `voiceStatus` and `llmHistory` (Jenny replies, last 20) are kept separate from `lastMessage`, so the ~30 ms `cv_update` stream cannot overwrite them. Keep it that way.
+- **WebSocket provider:** `lastVoiceCommand`, `voiceStatus`, `llmHistory` (Jenny replies, last 20) and `jennyStatus` are kept separate from `lastMessage`, so the ~30 ms `cv_update` stream cannot overwrite them. Keep it that way.
+- **Ask Jenny:** while Jenny records a question, the mic chunks go to Jenny instead of Vosk, and the frontend mutes effects and lowers the music (`setJennyListening` in `sfx.ts`). LLM calls never block the WebSocket receive loop (`llm_query` runs in a background task).
 - **Contracts:** WebSocket message shapes are public. Update `backend/app/schemas/contracts.py`, `frontend/src/types/contracts.ts` and `docs/API_Contracts.md` together.
-  - Server → client: `cv_update`, `llm_response`, `status`, `voice_command`, `voice_status`.
+  - Server → client: `cv_update`, `llm_response`, `status`, `voice_command`, `voice_status`, `jenny_status`.
   - Client → server: `llm_query`, `ui_mode`.
 - Keep recipe persistence JSON-file based unless a task explicitly introduces another storage layer.
 - Preserve hardware-free testability. Tests must not need a webcam, microphone, YOLO weights, the Vosk model, MediaPipe runtime or Ollama.

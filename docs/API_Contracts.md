@@ -87,11 +87,13 @@ interface LLMQueryMessage {
 
 type UIMode = "menu" | "ingredient_check" | "cooking";
 
-/** Sent whenever the HUD screen changes and after every reconnect, so the
- *  backend maps voice phrases for the screen that is showing. */
+/** Sent whenever the HUD screen or open recipe changes and after every
+ *  reconnect, so the backend maps voice phrases for the screen that is
+ *  showing and Jenny answers about the open recipe. */
 interface UIModeMessage {
   type: "ui_mode";
   mode: UIMode;
+  recipe_id?: string | null;   // open recipe, null on the menu
 }
 ```
 
@@ -105,10 +107,10 @@ Example:
 ```
 
 ```json
-{ "type": "ui_mode", "mode": "cooking" }
+{ "type": "ui_mode", "mode": "ingredient_check", "recipe_id": "fried_rice" }
 ```
 
-Any other payload gets a `status` reply with `"Invalid WebSocket message"`.
+Any other payload gets a `status` reply with `"Invalid WebSocket message"`. An `llm_query` is answered in the background, so later messages are handled while the LLM is still working.
 
 ## WebSocket Server Messages
 
@@ -118,7 +120,8 @@ type ServerWebSocketMessage =
   | LLMResponseMessage
   | StatusMessage
   | VoiceCommandMessage
-  | VoiceStatusMessage;
+  | VoiceStatusMessage
+  | JennyStatusMessage;
 ```
 
 ### `cv_update`
@@ -143,6 +146,8 @@ type GestureAction =
   | "RESET_TIMER"
   | "READ_STEP"
   | "CHECK_INGREDIENT"
+  // Session 2: "hello jenny" starts recording one free-speech question
+  | "ASK_JENNY"
   | "THEME_DARK"
   | "THEME_LIGHT"
   | "NO_ACTION";
@@ -183,6 +188,8 @@ Gesture actions per screen. The gesture interpreter follows the screen through `
 | `cooking` | Thumb up | `TOGGLE_THEME` |
 
 ### `llm_response`
+
+Jenny's answer, to an `llm_query` or to a question spoken after "hello jenny" (then `query` is the transcribed question).
 
 ```ts
 interface LLMResponseMessage {
@@ -225,6 +232,7 @@ interface VoiceCommandMessage {
 | `menu` | "next" / "back" / "okay" | `MENU_NEXT` / `MENU_PREVIOUS` / `SELECT_RECIPE` |
 | `ingredient_check` | "ready" | `CHECK_INGREDIENT` (frontend ticks the next unchecked ingredient) |
 | `ingredient_check` | "let's cook" | `CONFIRM_READY` (start cooking) |
+| `ingredient_check` | "hello jenny" | `ASK_JENNY` (the backend records the next `JENNY_LISTEN_SECONDS` as a question for Jenny; see `jenny_status`) |
 | `ingredient_check` | "back to menu" | `BACK_TO_MENU` |
 | `ingredient_check`, `cooking` | "black" / "white" | `THEME_DARK` / `THEME_LIGHT` |
 | `cooking` | "next step", "next" | `NEXT_STEP` |
@@ -246,3 +254,20 @@ interface VoiceStatusMessage {
   };
 }
 ```
+
+### `jenny_status`
+
+Ask Jenny progress. Sent to each client when it connects and to everyone on every change. After "hello jenny", the backend records the question (`listening`), transcribes it with faster-whisper and asks the local LLM (`thinking`), then sends the answer as `llm_response` and returns to `idle`.
+
+```ts
+interface JennyStatusMessage {
+  type: "jenny_status";
+  data: {
+    state: "idle" | "listening" | "thinking" | "unavailable";
+    transcript?: string | null;   // the heard question, while "thinking"
+    message?: string | null;      // e.g. "Didn't catch that…" (idle) or why Jenny is unavailable
+  };
+}
+```
+
+`unavailable` means voice is off (`VOICE_ENABLED` / `JENNY_ENABLED`) or the speech model could not load.

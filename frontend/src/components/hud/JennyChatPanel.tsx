@@ -1,5 +1,8 @@
 import { useEffect, useRef } from 'react';
+import { motion } from 'framer-motion';
+import { playSfx, setJennyListening } from '../../audio/sfx';
 import { useWebSocket } from '../../context/useWebSocket';
+import type { JennyStatusMessage } from '../../types/contracts';
 
 /** One camera-tracked ingredient of the current recipe. */
 export interface CameraItem {
@@ -45,21 +48,42 @@ const labelStyle = (color: string): React.CSSProperties => ({
     letterSpacing: 3.17,
 });
 
+/** Short status next to the panel label; the full note goes in the tooltip. */
+function statusText(status: JennyStatusMessage['data']): string {
+    switch (status.state) {
+        case 'listening': return 'Listening…';
+        case 'thinking': return 'Thinking…';
+        case 'unavailable': return 'Offline';
+        default: return status.message ?? 'Say “Hello Jenny”';
+    }
+}
+
 /**
- * Session 2 side panel: chat history with Jenny (the local LLM, via
- * `llm_query` / `llm_response`), plus a chip per camera-tracked ingredient.
- * Replies come from WebSocketProvider's llmHistory, which the cv_update
- * stream can't overwrite.
+ * Session 2 side panel: chat history with Jenny (the local LLM), plus a chip
+ * per camera-tracked ingredient. The user says "Hello Jenny", waits for the
+ * pop, then asks; the backend records and transcribes the question and
+ * reports progress as `jenny_status`. Replies come from WebSocketProvider's
+ * llmHistory, which the cv_update stream can't overwrite.
  */
 export function JennyChatPanel({ cameraItems, colors }: JennyChatPanelProps) {
-    const { llmHistory } = useWebSocket();
+    const { llmHistory, jennyStatus } = useWebSocket();
     const historyRef = useRef<HTMLDivElement>(null);
+    const listening = jennyStatus.state === 'listening';
+    const pendingQuestion = jennyStatus.state === 'thinking' ? jennyStatus.transcript ?? null : null;
 
-    // Keep the newest reply in view.
+    // Keep the newest reply (or the question being answered) in view.
     useEffect(() => {
         const el = historyRef.current;
         if (el) el.scrollTop = el.scrollHeight;
-    }, [llmHistory.length]);
+    }, [llmHistory.length, pendingQuestion]);
+
+    // Cue the user to speak, then keep music and effects out of the recording.
+    useEffect(() => {
+        if (!listening) return;
+        playSfx('popup');
+        setJennyListening(true);
+        return () => setJennyListening(false);
+    }, [listening]);
 
     return (
         <div style={{
@@ -75,7 +99,29 @@ export function JennyChatPanel({ cameraItems, colors }: JennyChatPanelProps) {
             overflow: 'hidden',
             boxSizing: 'border-box',
         }}>
-            <div style={{ ...labelStyle(colors.label), flexShrink: 0 }}>ASK JENNY</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexShrink: 0, minWidth: 0 }}>
+                <div style={{ ...labelStyle(colors.label), flexShrink: 0 }}>ASK JENNY</div>
+                <div
+                    role="status"
+                    title={jennyStatus.message ?? undefined}
+                    style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0,
+                        color: listening ? colors.chipLive : colors.emptyText,
+                        fontSize: 9.6, fontFamily: 'Inter, sans-serif', fontWeight: listening ? 700 : 500,
+                        lineHeight: '15.84px', whiteSpace: 'nowrap',
+                    }}
+                >
+                    {listening && (
+                        <motion.span
+                            aria-hidden
+                            animate={{ opacity: [1, 0.25, 1] }}
+                            transition={{ duration: 1, repeat: Infinity, ease: 'easeInOut' }}
+                            style={{ width: 7, height: 7, borderRadius: 999, background: colors.chipLive, flexShrink: 0 }}
+                        />
+                    )}
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{statusText(jennyStatus)}</span>
+                </div>
+            </div>
 
             {/* Camera-tracked ingredients: one chip each, none if the recipe has none */}
             {cameraItems.length > 0 && (
@@ -122,14 +168,17 @@ export function JennyChatPanel({ cameraItems, colors }: JennyChatPanelProps) {
                     display: 'flex', flexDirection: 'column', gap: 8,
                 }}
             >
-                {llmHistory.length === 0 ? (
+                {llmHistory.length === 0 && pendingQuestion === null ? (
                     <span style={{
                         color: colors.emptyText, fontSize: 10.4, fontFamily: 'Inter, sans-serif',
                         lineHeight: '15.6px',
                     }}>
-                        Missing an ingredient? Jenny’s suggestions show up here.
+                        Missing an ingredient? Say “Hello Jenny”, wait for the pop, then ask your question.
                     </span>
-                ) : llmHistory.map((entry, i) => (
+                ) : [
+                    ...llmHistory,
+                    ...(pendingQuestion !== null ? [{ query: pendingQuestion, response: null }] : []),
+                ].map((entry, i) => (
                     <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                         <span style={{
                             alignSelf: 'flex-end', maxWidth: '90%',
@@ -148,9 +197,11 @@ export function JennyChatPanel({ cameraItems, colors }: JennyChatPanelProps) {
                                 fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.9, lineHeight: '13px',
                             }}>Jenny</div>
                             <div style={{
-                                color: colors.replyText, fontSize: 11.2, fontFamily: 'Inter, sans-serif',
+                                color: entry.response === null ? colors.emptyText : colors.replyText,
+                                fontSize: 11.2, fontFamily: 'Inter, sans-serif',
                                 lineHeight: '16.8px', whiteSpace: 'pre-wrap',
-                            }}>{entry.response}</div>
+                                fontStyle: entry.response === null ? 'italic' : 'normal',
+                            }}>{entry.response ?? 'Thinking…'}</div>
                         </div>
                     </div>
                 ))}

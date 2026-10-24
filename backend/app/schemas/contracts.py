@@ -37,6 +37,8 @@ class GestureAction(str, Enum):
     RESET_TIMER = "RESET_TIMER"
     READ_STEP = "READ_STEP"
     CHECK_INGREDIENT = "CHECK_INGREDIENT"
+    # Session 2: "hello jenny" starts recording one free-speech question
+    ASK_JENNY = "ASK_JENNY"
     THEME_DARK = "THEME_DARK"
     THEME_LIGHT = "THEME_LIGHT"
     NO_ACTION = "NO_ACTION"
@@ -104,7 +106,25 @@ class VoiceStatusMessage(BaseModel):
     data: VoiceStatusData
 
 
+JennyState = Literal["idle", "listening", "thinking", "unavailable"]
+
+
+class JennyStatusData(BaseModel):
+    state: JennyState
+    # The heard question while thinking.
+    transcript: Optional[str] = None
+    # A short note for the HUD, e.g. "Didn't catch that" or why Jenny is unavailable.
+    message: Optional[str] = None
+
+
+class JennyStatusMessage(BaseModel):
+    type: Literal["jenny_status"] = "jenny_status"
+    data: JennyStatusData
+
+
 class UIModeMessage(BaseModel):
-    """Client → server: which HUD screen is showing, so voice phrases map per screen."""
+    """Client → server: which HUD screen is showing, so voice phrases map per screen,
+    and which recipe is open, so Jenny can answer about it."""
     type: Literal["ui_mode"] = "ui_mode"
     mode: UIMode
+    recipe_id: Optional[str] = None

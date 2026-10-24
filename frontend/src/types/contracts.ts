@@ -51,6 +51,8 @@ export type GestureAction =
     | 'RESET_TIMER'
     | 'READ_STEP'
     | 'CHECK_INGREDIENT'
+    // Session 2: "hello jenny" starts recording one free-speech question
+    | 'ASK_JENNY'
     | 'THEME_DARK'
     | 'THEME_LIGHT'
     | 'NO_ACTION';
@@ -100,15 +102,32 @@ export interface VoiceStatusMessage {
     };
 }
 
+export type JennyState = 'idle' | 'listening' | 'thinking' | 'unavailable';
+
+export interface JennyStatusMessage {
+    type: 'jenny_status';
+    data: {
+        state: JennyState;
+        /** The heard question while thinking. */
+        transcript?: string | null;
+        /** A short note, e.g. "Didn't catch that" or why Jenny is unavailable. */
+        message?: string | null;
+    };
+}
+
 export interface LLMQueryMessage {
     type: 'llm_query';
     query: string;
 }
 
-/** Tells the backend which HUD screen is showing, so voice phrases map per screen. */
+/**
+ * Tells the backend which HUD screen is showing, so voice phrases map per screen,
+ * and which recipe is open, so Jenny can answer about it.
+ */
 export interface UIModeMessage {
     type: 'ui_mode';
     mode: UIMode;
+    recipe_id?: string | null;
 }
 
 export type ServerWebSocketMessage =
@@ -116,5 +135,6 @@ export type ServerWebSocketMessage =
     | LLMResponseMessage
     | StatusMessage
     | VoiceCommandMessage
-    | VoiceStatusMessage;
+    | VoiceStatusMessage
+    | JennyStatusMessage;
 export type ClientWebSocketMessage = LLMQueryMessage | UIModeMessage;

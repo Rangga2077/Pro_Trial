@@ -297,10 +297,12 @@ export function useProjectionHud(): ProjectionHudViewModel {
     }, [isIngredientCheck, isMenuOpen]);
 
     // Tell the backend which screen is showing (and again after reconnects)
-    // so "next" means next recipe on the menu but next step while cooking.
+    // so "next" means next recipe on the menu but next step while cooking,
+    // plus the open recipe, which Jenny answers about.
+    const currentRecipeId = currentRecipe?.id ?? null;
     useEffect(() => {
-        if (isConnected) sendMessage({ type: 'ui_mode', mode });
-    }, [isConnected, mode, sendMessage]);
+        if (isConnected) sendMessage({ type: 'ui_mode', mode, recipe_id: currentRecipeId });
+    }, [currentRecipeId, isConnected, mode, sendMessage]);
 
     /* ── Sound ─────────────────────────────────────────────────────── */
     useEffect(() => {
