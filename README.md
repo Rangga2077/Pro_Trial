@@ -204,7 +204,7 @@ Optional and fully offline: the backend listens with Vosk (English) and only rec
 
 Setup and tuning: [`docs/HARDWARE_SETUP.md`](docs/HARDWARE_SETUP.md#3b-the-microphone-voice-commands). Settings: `VOICE_*` in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#8-configuration-reference).
 
-**Ask Jenny** (session 2) records the question from the same microphone, transcribes it locally with faster-whisper (`JENNY_STT_MODEL`, default `base.en`) and answers with the local Ollama model (`OLLAMA_MODEL`, default `llama3.2:3b`; run `ollama pull llama3.2:3b`). It needs `VOICE_ENABLED=true`; set `JENNY_ENABLED=false` to turn it off. The HUD music drops while Jenny listens.
+**Ask Jenny** (session 2) records the question from the same microphone, transcribes it locally with faster-whisper (`JENNY_STT_MODEL`, default `base.en`) and answers with the local Ollama model (`OLLAMA_MODEL`, default `llama3.2:3b`; run `ollama pull llama3.2:3b` once). `start_app.bat` starts Ollama automatically if it isn't running. It needs `VOICE_ENABLED=true`; set `JENNY_ENABLED=false` to turn it off. The HUD music drops while Jenny listens.
 
 ---
 
