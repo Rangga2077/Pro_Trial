@@ -33,3 +33,6 @@ pytest-cache-files-*/
 Changecirclecolor/
 Sessioningcheck/
 Userwelcomepagewithmenu/
+
+frontend/tsconfig.tsbuildinfo
+Paper and Essentials/
