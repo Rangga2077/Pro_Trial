@@ -4,11 +4,13 @@ import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import type { GestureAction, Ingredient, Recipe, VoiceCommandMessage, VoiceState } from '../../types/contracts';
 import type { ThemeMode } from '../../hooks/useProjectionHud';
 import { useIdleActivity } from '../../hooks/useIdleActivity';
+import { gestureLabel, useHandGestures } from '../../hooks/useHandGestures';
 import { playSfx } from '../../audio/sfx';
 import svgPaths from '../svgTimerRings';
 import { tipsForStep } from './cookingTips';
 import { StoveZoneAmbient } from './StoveZoneAmbient';
 import { TipBubble } from './TipBubble';
+import { DEFAULT_UTENSILS } from './utensils';
 import { VoiceStatusIndicator } from './VoiceStatusIndicator';
 
 export interface RecipeHudProps {
@@ -171,6 +173,40 @@ function ThemeSwitcher({ theme, onToggle, palette }: { theme: ThemeMode; onToggl
                 </svg>
             )}
         </button>
+    );
+}
+
+/** Stove status rows: the live raw gesture per hand, or "Miss" when the hand is out of view. */
+function HandStatusRows({ palette }: { palette: Palette }) {
+    const hands = useHandGestures();
+    return (
+        <>
+            {(['Left', 'Right'] as const).map((side, i) => {
+                const gesture = hands[side];
+                return (
+                    <div key={side} style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        marginBottom: i === 0 ? 5 : 0,
+                    }}>
+                        <span style={{
+                            color: palette.primaryText,
+                            fontSize: 11,
+                            fontFamily: 'Inter, sans-serif',
+                            fontWeight: 400,
+                            lineHeight: '16.50px',
+                        }}>{side} Hand:</span>
+                        <span style={{
+                            color: gesture ? '#FF5A6A' : palette.utensilText,
+                            fontSize: 11,
+                            fontFamily: 'Inter, sans-serif',
+                            fontWeight: gesture ? 700 : 400,
+                            lineHeight: '16.50px',
+                        }}>{gesture ? gestureLabel(gesture) : 'Miss'}</span>
+                    </div>
+                );
+            })}
+        </>
     );
 }
 
@@ -1172,8 +1208,8 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                                     UTENSILS
                                 </div>
                                 <div style={DIVIDER} />
-                                {['Skillet', 'Spatula', 'Timer'].map((tool) => (
-                                    <div key={tool} style={{
+                                {DEFAULT_UTENSILS.map((tool) => (
+                                    <div key={tool.name} style={{
                                         display: 'flex',
                                         alignItems: 'center',
                                         gap: 8,
@@ -1194,7 +1230,12 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                                             fontFamily: 'Inter, sans-serif',
                                             fontWeight: 400,
                                             lineHeight: '16.50px',
-                                        }}>{tool}</span>
+                                        }}>
+                                            {tool.name}
+                                            {tool.optional && (
+                                                <span style={{ fontSize: 9.60, opacity: 0.7 }}> (optional)</span>
+                                            )}
+                                        </span>
                                     </div>
                                 ))}
                             </div>
@@ -1214,42 +1255,7 @@ export const RecipeHud: React.FC<RecipeHudProps> = ({
                                     marginTop: 7,
                                     marginBottom: 13,
                                 }}>ACTIVE</div>
-                                <div style={{
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    marginBottom: 5,
-                                }}>
-                                    <span style={{
-                                        color: palette.primaryText,
-                                        fontSize: 11,
-                                        fontFamily: 'Inter, sans-serif',
-                                        fontWeight: 400,
-                                        lineHeight: '16.50px',
-                                    }}>Left Hand:</span>
-                                    <span style={{
-                                        color: '#FF5A6A',
-                                        fontSize: 11,
-                                        fontFamily: 'Inter, sans-serif',
-                                        fontWeight: 700,
-                                        lineHeight: '16.50px',
-                                    }}>Detected</span>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <span style={{
-                                        color: palette.primaryText,
-                                        fontSize: 11,
-                                        fontFamily: 'Inter, sans-serif',
-                                        fontWeight: 400,
-                                        lineHeight: '16.50px',
-                                    }}>Right Hand:</span>
-                                    <span style={{
-                                        color: palette.utensilText,
-                                        fontSize: 11,
-                                        fontFamily: 'Inter, sans-serif',
-                                        fontWeight: 400,
-                                        lineHeight: '16.50px',
-                                    }}>Miss</span>
-                                </div>
+                                <HandStatusRows palette={palette} />
                             </div>
 
                             {/* Details box — recipe timing */}

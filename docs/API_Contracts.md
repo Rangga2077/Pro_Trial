@@ -159,17 +159,26 @@ interface Detection {
   track_id: number;
 }
 
+// One hand in view and its raw MediaPipe gesture.
+interface HandGesture {
+  hand: string;      // "Left" | "Right" (MediaPipe handedness, same labels the interpreter uses)
+  gesture: string;   // e.g. "POINTING_UP", "OPEN_PALM", "CLOSED_FIST", "THUMB_UP"; "UNKNOWN" = hand seen, no gesture matched
+}
+
 interface CVUpdateMessage {
   type: "cv_update";
   data: {
     frame: string;
     objects: Detection[];
     action: GestureAction | null;
+    hands: HandGesture[];   // empty when no hand is in view
   };
 }
 ```
 
 The backend normally sends `null` instead of `NO_ACTION` when no UI action should fire.
+
+`hands` is for status display only (the Left/Right Hand rows on the Cooking screen). The frontend must not turn it into actions; only `action` drives the UI. The backend also prints a `[gesture-log]` line to stdout whenever a hand appears, changes gesture or leaves view (`GESTURE_LOG_ENABLED`).
 
 Gesture actions per screen. The gesture interpreter follows the screen through `ui_mode`, so it stays in sync when the screen changes by voice or click.
 

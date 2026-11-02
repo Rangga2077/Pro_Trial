@@ -232,7 +232,7 @@ Setup and tuning: [`docs/HARDWARE_SETUP.md`](docs/HARDWARE_SETUP.md#3b-the-micro
 
 | Endpoint | Direction | Message type |
 |---|---|---|
-| `ws://localhost:8000/ws/` | Server → Client | `cv_update` (frame + objects + action) |
+| `ws://localhost:8000/ws/` | Server → Client | `cv_update` (frame + objects + action + hands) |
 | `ws://localhost:8000/ws/` | Server → Client | `llm_response` |
 | `ws://localhost:8000/ws/` | Server → Client | `voice_command`, `voice_status`, `jenny_status` |
 | `ws://localhost:8000/ws/` | Client → Server | `llm_query`, `ui_mode` |

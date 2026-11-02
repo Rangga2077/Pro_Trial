@@ -6,8 +6,9 @@ import time
 from app.engines.cv.yolo import yolo_model
 from app.engines.cv.gesture import gesture_recognizer, draw_landmarks_on_image
 from app.core.config import settings
-from app.schemas.contracts import CVUpdateData, CVUpdateMessage, Detection, GestureAction, RawGesture
+from app.schemas.contracts import CVUpdateData, CVUpdateMessage, Detection, GestureAction, HandGesture, RawGesture
 from app.services.gesture_actions import gesture_action_interpreter
+from app.services.gesture_log import hand_gesture_log
 from app.services.realtime import realtime_service
 
 class ThreadedCamera:
@@ -73,6 +74,7 @@ class CVPipeline:
                 # Using LIVE_STREAM, this returns the immediately available async results
                 gestures, landmarks = gesture_recognizer.recognize(frame)
                 raw_gestures = [RawGesture(**gesture) for gesture in gestures]
+                hand_gesture_log.update(raw_gestures)
                 action = gesture_action_interpreter.interpret(raw_gestures)
                 action_payload = action if action != GestureAction.NO_ACTION else None
                 
@@ -107,6 +109,7 @@ class CVPipeline:
                         data=CVUpdateData(
                             objects=[Detection(**detection) for detection in detections],
                             action=action_payload,
+                            hands=[HandGesture(hand=g.hand, gesture=g.gesture) for g in raw_gestures],
                             frame=frame_b64,
                         )
                     )

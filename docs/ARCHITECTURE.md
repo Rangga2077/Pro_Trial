@@ -145,6 +145,8 @@ Raw per-frame gesture data is noisy. `GestureActionInterpreter` converts it into
 
 An optional `GestureMonitor` logs per-frame anchor and swipe progress to stdout for debugging (`GESTURE_MONITOR_ENABLED=true`).
 
+`HandGestureLog` (`services/gesture_log.py`) prints a `[gesture-log]` line whenever a hand appears, changes raw gesture or leaves view (`GESTURE_LOG_ENABLED=true`).
+
 ### 3.4 Realtime Service (`realtime.py`)
 
 `RealtimeService` maintains the set of active WebSocket connections and exposes a `broadcast(message)` coroutine that serializes and sends to all connected clients. The CV pipeline calls `realtime_service.broadcast(...)` at the end of every processed frame.
@@ -189,10 +191,15 @@ Sent on every processed camera frame (~30 fps target):
         "track_id": 3
       }
     ],
-    "action": "MENU_NEXT"
+    "action": "MENU_NEXT",
+    "hands": [
+      { "hand": "Right", "gesture": "POINTING_UP" }
+    ]
   }
 }
 ```
+
+`hands` lists each hand in view with its raw gesture, for the Cooking screen's Left/Right Hand status only; it never drives actions.
 
 `action` is `null` when no gesture is recognized, or one of:
 
@@ -446,6 +453,7 @@ These must stay in sync. Any new field added to a server message schema must be 
 | `GESTURE_SWIPE_THRESHOLD` | `0.06` | Normalized x-displacement to trigger a swipe |
 | `GESTURE_MONITOR_ENABLED` | `true` | Log per-frame gesture progress to stdout |
 | `GESTURE_MONITOR_SAMPLE_SECONDS` | `0.25` | Logging interval for gesture monitor |
+| `GESTURE_LOG_ENABLED` | `true` | Log each per-hand gesture change to stdout |
 | `RECIPE_DATA_DIR` | `../data/recipes` | Path to recipe JSON directory |
 | `CORS_ORIGINS` | `http://localhost:5173,...` | Allowed CORS origins |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server address |

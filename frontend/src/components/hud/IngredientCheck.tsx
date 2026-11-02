@@ -11,9 +11,12 @@ import { JennyChatPanel } from './JennyChatPanel';
 import { ScanZoneAmbient } from './ScanZoneAmbient';
 import { TipBubble } from './TipBubble';
 import { VoiceStatusIndicator } from './VoiceStatusIndicator';
+import { DEFAULT_UTENSILS } from './utensils';
 
 export type ScanState = 'EMPTY' | 'DETECTING' | 'MATCHED' | 'WRONG ITEM' | 'READY';
 const SCAN_STATES: ScanState[] = ['EMPTY', 'DETECTING', 'MATCHED', 'WRONG ITEM', 'READY'];
+/** The scan-state tabs are display-only; hidden while YOLO detection is off. Set true to bring them back. */
+const SHOW_SCAN_STATES = false;
 
 export interface IngredientCheckProps {
     recipe: Recipe;
@@ -701,8 +704,8 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                             <ThemeSwitcher theme={theme} onToggle={onToggleTheme} palette={palette} />
                         </div>
 
-                        {/* Row 2: Scan state tabs (full-bleed) */}
-                        <div style={{
+                        {/* Row 2: Scan state tabs (full-bleed), hidden while YOLO detection is off */}
+                        {SHOW_SCAN_STATES && <div style={{
                             position: 'relative',
                             left: -17.51,
                             width: 'calc(100% + 35.02px)',
@@ -741,7 +744,7 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                                     </button>
                                 );
                             })}
-                        </div>
+                        </div>}
 
                         {/* Row 3: Progress */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -849,9 +852,9 @@ export const IngredientCheck: React.FC<IngredientCheckProps> = ({
                             <div style={{ flexShrink: 0, marginTop: 12 }}>
                                 <div style={{ ...sectionLabel, marginBottom: 6 }}>UTENSILS</div>
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                                    <UtensilChip name="Wok" palette={palette} />
-                                    <UtensilChip name="Spatula" palette={palette} />
-                                    <UtensilChip name="Cutting Board" optional palette={palette} />
+                                    {DEFAULT_UTENSILS.map(utensil => (
+                                        <UtensilChip key={utensil.name} name={utensil.name} optional={utensil.optional} palette={palette} />
+                                    ))}
                                 </div>
                             </div>
                         </div>

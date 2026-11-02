@@ -59,12 +59,23 @@ export type GestureAction =
 
 export type UIMode = 'menu' | 'ingredient_check' | 'cooking';
 
+/**
+ * One hand in view and its raw MediaPipe gesture (e.g. 'POINTING_UP',
+ * 'UNKNOWN' when no gesture class matched). Display only: never map it to
+ * actions in React, those come from `action`.
+ */
+export interface HandGesture {
+    hand: string;
+    gesture: string;
+}
+
 export interface CVUpdateMessage {
     type: 'cv_update';
     data: {
         frame: string;
         objects: Detection[];
         action: GestureAction | null;
+        hands: HandGesture[];
     };
 }
 

@@ -18,6 +18,13 @@ class RawGesture(BaseModel):
     index_y: Optional[float] = None
 
 
+class HandGesture(BaseModel):
+    """One hand in view and its raw MediaPipe gesture. Display only: actions
+    still come from `GestureActionInterpreter` through `action`."""
+    hand: str
+    gesture: str
+
+
 class GestureAction(str, Enum):
     START_APP = "START_APP"
     RESET_APP = "RESET_APP"
@@ -51,6 +58,7 @@ class CVUpdateData(BaseModel):
     frame: str
     objects: list[Detection]
     action: Optional[GestureAction] = None
+    hands: list[HandGesture] = Field(default_factory=list)
 
 
 class CVUpdateMessage(BaseModel):

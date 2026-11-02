@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     GESTURE_SWIPE_THRESHOLD: float = 0.06
     GESTURE_MONITOR_ENABLED: bool = True
     GESTURE_MONITOR_SAMPLE_SECONDS: float = 0.25
+    # Print a line whenever a hand appears, changes gesture or leaves the camera.
+    GESTURE_LOG_ENABLED: bool = True
 
     # Voice commands (offline Vosk, English). Off by default so the app and
     # tests run without a microphone or model download.
